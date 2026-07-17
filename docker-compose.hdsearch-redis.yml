@@ -1,0 +1,11 @@
+# DEPRECATED — HD-Search now uses shared `hd-redis` (Redis Stack + RediSearch) on hdnet.
+#
+#   Start core infra from repo root:  ./start_core_infra.sh up
+#   Docker URL:  redis://hd-redis:6379/2   (logical db 2, key prefix hds:)
+#   Host URL:    redis://127.0.0.1:6379/2
+#
+# The standalone `hdsearch-redis` container on :6390 is no longer used. Remove any
+# leftover container/volume if migrating:
+#   docker rm -f hdsearch-redis 2>/dev/null; docker volume rm hdsearch-redis-data 2>/dev/null || true
+#
+# This file is kept as documentation only — do not `include` it in docker-compose.yml.

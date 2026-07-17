@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.prod
+*.log
+.DS_Store
+.hdsearch-secrets.json

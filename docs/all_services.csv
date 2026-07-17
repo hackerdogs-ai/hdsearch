@@ -1,0 +1,60 @@
+Category,Service,ID,Type,Key Required,Purpose
+Infrastructure,PostgreSQL / TimescaleDB,hd-db,Self-hosted,No,User credentials (AES-256-GCM encrypted), search history, usage metrics (hypertables), LLM provider/model registry, API keys
+Infrastructure,Redis Stack (RediSearch),hd-redis,Self-hosted,No,"Cache, rate limiting, vector index (HNSW), session store. DB 0 = vectors, DB 5 = general keyspace"
+Infrastructure,SeaweedFS (S3-compatible),hd-seaweedfs,Self-hosted,No,Object storage for raw crawl payloads and search history archives
+Infrastructure,Transformers Inference (MiniLM),hd-weaviate-t2v,Self-hosted,No,MiniLM-L6-v2 sentence embeddings (384-dim) for vector search
+Infrastructure,Tor SOCKS5 Proxy,hackerdogs-tor-proxy,Self-hosted,No,Darkweb .onion access for Torch and Ahmia providers
+Application,hdsearch API,hdsearch,Self-hosted,No,"Hono REST aggregator (Node.js) — search, crawl, vector, AI, MCP endpoints"
+Application,hdsearch Web,hdsearch-web,Self-hosted,No,"Next.js SPA — search UI, AI chat, dashboard, provider catalog, admin panel"
+Search Provider,OpenSERP,openserp,Self-hosted,No,"Browser-based SERP scraper (Google, Yandex, Bing, Baidu). Priority 10"
+Search Provider,SearXNG,searxng,Self-hosted,No,"Privacy meta-search engine aggregating 50+ upstream engines. Priority 20"
+Search Provider,DuckDuckGo,duckduckgo,Free External,No,Privacy-focused web search. Priority 100
+Search Provider,Wikipedia,wikipedia,Free External,No,Wikipedia article search via MediaWiki API. Priority 200
+Search Provider,GDELT 2.0,gdelt,Free External,No,Real-time global news/event monitoring. Priority 150
+Search Provider,Wayback Machine,wayback,Free External,No,Internet Archive historical snapshots. Priority 300
+Search Provider,Common Crawl,commoncrawl,Free External,No,Petabyte-scale web archive index search. Priority 310
+Search Provider,Brave Search,brave,Commercial,Yes (brave),Web/news/images/videos search API. Priority 220
+Search Provider,Serper.dev,serper,Commercial,Yes (serper),"Google SERP API — web, news, images, videos, places, shopping, scholar"
+Search Provider,SerpAPI,serpapi,Commercial,Yes (serpapi),"Multi-engine SERP API — web, news, images, videos, scholar, shopping, places"
+Search Provider,Tavily AI Search,tavily,Commercial,Yes (tavily),AI-optimized search API for LLM context. Priority 230
+Search Provider,Exa Neural Search,exa,Commercial,Yes (exa),Neural/semantic web search. Priority 240
+Search Provider,Kagi Search,kagi,Commercial,Yes (kagi),"Premium independent search — web, news, images, videos. Priority 245"
+Search Provider,Google CSE,google_cse,Commercial,Yes (google_cse + google_cse_cx),Google Programmable Search Engine. Priority 250
+Search Provider,Maps / Photon,maps,Self-hosted,No,"Local places/POI search via OSM Photon geocoder + Overpass API. Priority 50"
+Darkweb Provider,Ahmia,ahmia,Free External,No,Tor hidden service search engine (clearnet + .onion). Priority 100
+Darkweb Provider,Torch,torch,Free External,No,Tor-only .onion search engine (requires Tor proxy). Priority 200
+Darkweb Provider,Intelligence X,intelx,Commercial,Yes (intelx),"Leak, paste, and darknet data search API. Priority 300"
+Crawl Provider,Crawl4AI,crawl4ai,Self-hosted,No,LLM-friendly web crawler with JS rendering. Top priority (10)
+Crawl Provider,Browserless,browserless,Self-hosted,Optional,Headless browser-as-a-service for JS rendering
+Crawl Provider,Jina Reader,jina_reader,Freemium,Optional (jina),Clean markdown extraction from any URL. Priority 40
+Crawl Provider,Firecrawl,firecrawl,Commercial,Yes (firecrawl),Structured web crawl + markdown conversion. Priority 210
+Crawl Provider,Basic HTTP Fetch,basic,Self-hosted,No,Plain HTTP GET + Readability parsing. Lowest priority fallback (990)
+LLM Provider,Anthropic,anthropic,Commercial,Yes (anthropic),"Claude Opus 4.8/4.7, Sonnet 4.6, Haiku 4.5, Fable 5. Flagship AI provider"
+LLM Provider,OpenAI,openai,Commercial,Yes (openai),"GPT-4.1, 4.1-mini, 4.1-nano, o3, o4-mini"
+LLM Provider,xAI (Grok),xai,Commercial,Yes (xai),"Grok 3, Grok 3 Mini"
+LLM Provider,Google,google,Commercial,Yes (google),"Gemini 2.5 Pro, Gemini 2.5 Flash"
+LLM Provider,AWS Bedrock,aws_bedrock,Commercial,Yes (aws_access_key),"Claude Sonnet 4.6, Claude Haiku 4.5 via AWS"
+LLM Provider,Azure OpenAI,azure,Commercial,Yes (azure_openai),"GPT-4.1, GPT-4.1 Mini via Azure"
+LLM Provider,OpenRouter,openrouter,Commercial,Yes (openrouter),Multi-provider gateway routing to 200+ models
+LLM Provider,Groq,groq,Commercial,Yes (groq),"Llama 3.3 70B, Llama 4 Maverick — ultra-fast inference"
+LLM Provider,Mistral AI,mistral,Commercial,Yes (mistral),"Mistral Large, Mistral Small"
+LLM Provider,Ollama,ollama,Self-hosted,No,Local LLM inference — models discovered dynamically at runtime
+Embeddings,MiniLM-L6-v2 (default),minilm,Self-hosted,No,384-dim sentence embeddings via Weaviate transformers-inference container
+Embeddings,OpenAI text-embedding-3-small,openai_embed,Commercial,Yes (openai),1536-dim embeddings via OpenAI API (optional alternative)
+Identity,Auth0,auth0,Commercial,Yes (AUTH0_DOMAIN),OAuth 2.0 + PKCE SPA authentication (production)
+Identity,Hackerdogs-Core,hd-core,Self-hosted,Yes (JWT_SECRET_KEY),"Central auth, plan resolution, RBAC, credit billing, SSO"
+Identity,Dev Login,dev_login,Self-hosted,No,Bypass auth in dev mode (HDSEARCH_DEV_LOGIN=1). Must be off in production
+Billing,Hackerdogs-Core Credits,core_credits,Self-hosted,No,"Central credit ledger — 1 credit = $0.01, usage-based billing"
+Billing,Stripe (retired),stripe,Commercial,Optional,"Payment processing for checkout/portal. Retired to hackerdogs-core"
+AI Tools,hd_search,hd_search,Built-in,No,AI tool — unified search across all providers with auto-modality
+AI Tools,hd_crawl,hd_crawl,Built-in,No,AI tool — fetch and read a URL as clean markdown
+AI Tools,hd_maps,hd_maps,Built-in,No,AI tool — find local places/businesses with interactive map
+AI Tools,hd_plot_map,hd_plot_map,Built-in,No,AI tool — plot named places/regions on a map
+AI Tools,hd_archive,hd_archive,Built-in,No,AI tool — fetch archived URL snapshots from Common Crawl / Wayback
+AI Tools,hd_chart,hd_chart,Built-in,No,"AI tool — render bar, line, pie, area charts from data"
+AI Tools,hd_weather,hd_weather,Built-in,No,AI tool — live weather data + 5-day forecast
+AI Tools,hd_render,hd_render,Built-in,No,"AI tool — rich UI cards (tables, code, stats, plans, social posts, etc.)"
+AI Tools,MCP Servers,mcp,External,Varies,Model Context Protocol — connect external tool servers (stdio/SSE)
+Geocoding,Photon (Komoot),photon,Free External,No,OSM geocoder — default public instance or self-hosted container
+Geocoding,Nominatim,nominatim,Free External,No,OSM geocoder — optional alternative to Photon
+Geocoding,Overpass API,overpass,Free External,No,OSM POI/tag query engine for maps modality

@@ -1,0 +1,46 @@
+{
+  "name": "@hd-search/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HD-Search web UI — SerpAPI-style marketing + user panel. Next.js App Router.",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "dev": "next dev -p ${PORT:-3000}",
+    "build": "next build",
+    "prepare-standalone": "mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && cp -r content .next/standalone/content",
+    "postbuild": "npm run prepare-standalone",
+    "start": "node .next/standalone/server.js",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@assistant-ui/core": "0.1.14",
+    "@assistant-ui/react": "0.12.25",
+    "@assistant-ui/react-markdown": "0.12.9",
+    "maplibre-gl": "^4.7.1",
+    "next": "14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "patch-package": "^8.0.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "@assistant-ui/core": "0.1.14",
+    "@assistant-ui/store": "0.2.7",
+    "@assistant-ui/tap": "0.5.8"
+  }
+}

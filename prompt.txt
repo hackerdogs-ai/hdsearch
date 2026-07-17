@@ -1,0 +1,48 @@
+From the attached Excel sheet, only focus on the "Internet_Search_APIs" sheet. 
+I want you to build a search +vector search) and crawl service called hd-search that does the following:
+1. Based on the user's search request to the search api, calls a prioritized list of search and crawl apis and deliveres results in a standardized format with dedup support.
+2. It also indexes the results with a TTL (configured per ssearch source) in redis (evaluate if redisearch - https://github.com/RediSearch/RediSearch will help here and suggest)
+3. The api will have two types of endpoints: search (searches the internet with existing search apis - e.g. openserp, serp, bravesearch, etc.), crawl: crawls a website pr a page in details and returnes normalized results (e.g. crawl4ai and similar).
+4. The apis expose majority of the features available in theose services in an aggregated manner
+5. In teh api, the user can also call specific search engine (e.g. brave_Search). The api can retrurn a list of availabel search engines too. 
+6. I want comprehensive search and crawl, not just text. text, image, videos, etc. Also support commoncrrawl
+7. The prioritry list is maintained in a csv with priority number as the first column. Default priority is hardcoded. The search works in such a way that:
+Default:
+search and crawl run the crawl by priority order and only calls the first one that returns the results. If first fails, it calls the second one and so on. 
+by default, the free and self hosted ones must be given higher priority
+for commercial, the keys for the commercial apis must be configured per user in a postgres/timescale database table per user
+for default, there will be keys in the .env for every commericial serv ice but they will be used only when the .env is running in RUN_MODE="dev"
+any new service added needs to be added in a standard plugin-like way to extend adding more search and crawl services
+8. The product will also have an UI exactly similar to Serp API but with a hackerdogs branding (that can change later) https://serpapi.com/
+The exact flows of page, signin-ins, etc need to be present. 
+if the list doesn't include darmweb search, then I need to add darkweb search too. Find out which ones are there and create an exhaustive list of free, open source and commercial darkweb search apis.
+Simialr to Serp, the product will also have an MCP server and when logged in into a user panel, should have all the Serp like LH page:
+Dashboard: We need to capture the metrics in timescaledb 
+Search History: Captured in timescale
+Account information: Profile, Billing, API Keys, Plans/Upgrade
+Integrations: MCP, API - clear and simple and very Dev oriented. 
+Documentation: Documentation of how to call the search and crawl apis
+Services: List of services configured in the product and their docs on how to use. 
+9. The Redis cache is important to avoid getting blocked or exhausted. 
+10. The api must also support storing vectors in redis when specific in the api with a TTL. Default TTL will be 24h
+11. The api must also support vector search across these as a separate api endpoint within the search cattegory
+12. And on the main home page, there should be a default search available for anything to search and the results should be a faceted search similar to Google facets or Amazon facets. We are alreadying doing facets in worldmonitor Search pages like SEW Search. Use similar concept. 
+
+Pricing/Transaction engine: Stripe --> Implement full transaction cycle for search based subscriptions including webhooks
+Authentication: Auth0. Retrieve email, profile image and name information
+Plans:
+Free: Free search only 100 free searches and crawl (no vector)
+Dev: ($20/month) 1000 searches and crawl (no vector)
+DevTest: ($200/month) 15000 searches (including vector) and crawl per month  
+Production: ($250/month) 30000 searches (same as Pro)
+Enterprise: Custom (call)
+
+
+Create a complete Serp Api like search engine api aggregator which can then later be enhanced with specialized searches too. 
+Dockerize pluse create start_*.sh to run them locally. 
+Create docker compose that runs the whole engine in one go. 
+Don't make it too complicated. Simplicity and scalability is important. 
+Use typescript as the main language
+Follow world class scale and resiliency and security standards with logging, exceptions handling and retries in place from the beginning. 
+The keys in the database must be encrypted and decrypted 
+Use existing/already running hd-redis running in docker and seaweedfs for storage in S3 compatible storage. 

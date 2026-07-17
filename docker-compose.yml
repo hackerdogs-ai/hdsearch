@@ -1,0 +1,143 @@
+# HD-Search — one-command local engine (spec: "docker compose that runs the whole
+# engine in one go"). It brings up:
+#   • hdsearch          — the aggregator API (Hono)
+#   • hd-openserp       — self-hosted multi-engine SERP scraper (free, top priority)
+#   • hd-searxng        — self-hosted meta-search over 50+ engines (free)
+#   • hd-crawl4ai       — self-hosted LLM crawler (free, top crawl priority)
+#
+# It reuses your EXISTING infra (hd-redis, hd-seaweedfs, hd-db, transformers-
+# inference) over the shared `hdnet` network — nothing is duplicated.
+#
+#   1. cp api/.env.example api/.env   and fill in (at minimum HDSEARCH_ENCRYPTION_KEY)
+#   2. ./start_core_infra.sh up       # shared hd-redis (Redis Stack + RediSearch) on :6379
+#   3. docker compose up -d --build
+#   4. docker compose run --rm hdsearch node dist/scripts/migrate.js   # one-time schema
+#   5. curl localhost:8791/healthz
+#
+# Vectors + cache + rate-limit + keys use shared hd-redis (Redis Stack / RediSearch)
+# on logical db 2 (prefix hds:). Requires core infra up first.
+
+services:
+  hdsearch:
+    build: ./api
+    image: hdsearch:api
+    container_name: hdsearch
+    restart: unless-stopped
+    env_file:
+      - path: ./api/.env
+        required: false
+    environment:
+      # point at existing infra over hdnet (override the 127.0.0.1 defaults in .env)
+      - HDSEARCH_REDIS_URL=${HDSEARCH_REDIS_URL:-redis://hd-redis:6379/2}
+      - HDSEARCH_DATABASE_URL=${HDSEARCH_DATABASE_URL:-postgres://hackerdogs:YOUR_PASSWORD@hd-db:5432/hdsearch}
+      - HDSEARCH_S3_ENDPOINT=${HDSEARCH_S3_ENDPOINT:-http://hd-seaweedfs:8333}
+      - HDSEARCH_EMBEDDINGS_URL=${HDSEARCH_EMBEDDINGS_URL:-http://hd-weaviate-t2v:8080}
+      - HDSEARCH_OPENSERP_URL=http://hd-openserp:7000
+      - HDSEARCH_OPENSERP_ENGINES=${HDSEARCH_OPENSERP_ENGINES:-google,yandex,bing,baidu}
+      - HDSEARCH_SEARXNG_URL=http://hd-searxng:8080
+      # reuse the already-running shared containers on hdnet
+      - HDSEARCH_CRAWL4AI_URL=${HDSEARCH_CRAWL4AI_URL:-http://hackerdogs-crawl4ai:11235}
+      - HDSEARCH_BROWSERLESS_URL=${HDSEARCH_BROWSERLESS_URL:-http://hackerdogs-browserless:3000}
+      # Maps geocoder (the `maps` modality). Empty → public Photon (works out of the
+      # box). To self-host, start the `maps` profile (below) and set this to
+      # http://hd-photon:2322 — both default to OpenStreetMap data.
+      - HDSEARCH_GEOCODER_ENGINE=${HDSEARCH_GEOCODER_ENGINE:-photon}
+      - HDSEARCH_GEOCODER_URL=${HDSEARCH_GEOCODER_URL:-}
+      # Tor proxy for .onion darkweb providers (reuses the shared hackerdogs-tor-proxy)
+      - HDSEARCH_TOR_PROXY=${HDSEARCH_TOR_PROXY:-socks5h://hackerdogs-tor-proxy:9050}
+      - HDSEARCH_API_PORT=8791
+      # shared secret so the web BFF can act on behalf of the logged-in user
+      - HDSEARCH_INTERNAL_SECRET=${HDSEARCH_INTERNAL_SECRET:-change-me-internal-secret}
+      # hdfeeds trends — URL is fixed on hdnet; copy HDSEARCH_HDFEEDS_INTERNAL_SECRET into api/.env
+      - HDSEARCH_HDFEEDS_BASE_URL=http://hdfeeds:8787
+      - HDSEARCH_HDFEEDS_INTERNAL_SECRET=${HDSEARCH_HDFEEDS_INTERNAL_SECRET:-}
+      - HDSEARCH_HDFEEDS_TIMEOUT_MS=${HDSEARCH_HDFEEDS_TIMEOUT_MS:-5000}
+      - HDSEARCH_TRENDS_CACHE_TTL=${HDSEARCH_TRENDS_CACHE_TTL:-600}
+      - HDSEARCH_HDFEEDS_SERVICE_ID=${HDSEARCH_HDFEEDS_SERVICE_ID:-hdsearch}
+    ports: ["8791:8791"]
+    networks: [hdnet]
+    depends_on: [hd-openserp, hd-searxng]
+
+  # ---- SerpAPI-style web UI (Next.js) ----
+  hdsearch-web:
+    build: ./web
+    image: hdsearch:web
+    container_name: hdsearch-web
+    restart: unless-stopped
+    env_file:
+      - path: ./web/.env
+        required: false
+    environment:
+      - HDSEARCH_API_URL=http://hdsearch:8791
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8791}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
+      - HDSEARCH_INTERNAL_SECRET=${HDSEARCH_INTERNAL_SECRET:-change-me-internal-secret}
+      - HDSEARCH_WEB_SESSION_SECRET=${HDSEARCH_WEB_SESSION_SECRET:-change-me-session-secret}
+    ports: ["3000:3000"]
+    networks: [hdnet]
+    depends_on: [hdsearch]
+
+  # NOTE: crawl4ai and browserless are NOT defined here — HD-Search REUSES the
+  # already-running shared containers `hackerdogs-crawl4ai` (:11235) and
+  # `hackerdogs-browserless` (:3000) on the hdnet network (see the api env above).
+
+  hd-openserp:
+    image: karust/openserp:latest
+    container_name: hd-openserp
+    restart: unless-stopped
+    platform: linux/amd64   # no native arm64 image; runs under emulation
+    # Flags enable engine fallback + caching + a circuit breaker so a captcha'd
+    # Google call degrades to Yandex/Baidu instead of failing. See openserp/config.yaml
+    # + docs/OPENSERP.md for the proxy/2captcha options that make Google usable.
+    command: ["serve", "-a", "0.0.0.0", "-p", "7000",
+              "--allow_endpoint_fallback", "--timeout", "20",
+              "--max_retries", "2", "--cache_ttl", "600", "--cache_max_size", "2000",
+              "--cb_failures", "3", "--cb_recovery", "120", "-l"]
+    ports: ["7007:7000"]    # host 7000 is taken on macOS (ControlCenter/AirPlay)
+    networks: [hdnet]
+
+  hd-searxng:
+    image: searxng/searxng:latest
+    container_name: hd-searxng
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8899/
+      # enable the JSON output format the API needs
+      - SEARXNG_SEARCH_FORMATS=html,json
+    ports: ["8899:8080"]
+    networks: [hdnet]
+    volumes:
+      - ./searxng:/etc/searxng:rw
+
+  # ---- self-hosted OpenStreetMap geocoder for the `maps` modality (OPT-IN) ----
+  # Photon (komoot) — geocodes place queries → lat/lon from OSM data. Gated behind
+  # the `maps` profile because the index is large: `monaco` is a few MB (great for a
+  # test), `europe`/`usa` are GB-scale, `planet` is ~116GB. First run downloads +
+  # extracts the index (can take a while) into the photon_data volume.
+  #
+  #   docker compose --profile maps up -d hd-photon
+  #   # then point the API at it:
+  #   HDSEARCH_GEOCODER_URL=http://hd-photon:2322 docker compose up -d hdsearch
+  #
+  # Without this, the API uses the public Photon instance (no setup required).
+  hd-photon:
+    image: rtuszik/photon-docker:latest
+    container_name: hd-photon
+    profiles: [maps]
+    restart: unless-stopped
+    environment:
+      - REGION=${HDSEARCH_PHOTON_REGION:-monaco}   # change to your country/continent or `planet`
+      - UPDATE_STRATEGY=PARALLEL
+      - UPDATE_INTERVAL=720h
+    ports: ["2322:2322"]
+    networks: [hdnet]
+    volumes:
+      - photon_data:/photon/data
+
+volumes:
+  photon_data:
+
+networks:
+  hdnet:
+    name: hdnet
+    external: true

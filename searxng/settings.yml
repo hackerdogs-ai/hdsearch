@@ -1,0 +1,15 @@
+# Minimal SearXNG settings for HD-Search. The key change vs. defaults is enabling
+# the JSON output format the aggregator consumes. Change `secret_key` before any
+# non-local deployment.
+use_default_settings: true
+
+server:
+  secret_key: "change-me-hd-search-local-dev"
+  limiter: false
+  image_proxy: true
+
+search:
+  # HD-Search reads results via &format=json — this must be enabled.
+  formats:
+    - html
+    - json

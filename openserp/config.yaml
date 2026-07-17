@@ -1,0 +1,35 @@
+# OpenSERP configuration for HD-Search.
+# Mounted into the container at /app/config.yaml and passed via `--config`.
+# These mirror the documented CLI flags (`openserp serve --help`). Tuned so the
+# scraper is resilient and cheap, and so a captcha'd engine transparently falls
+# back to a working one. See docs/OPENSERP.md for the full rationale.
+
+# Run a real headless browser (more robust parsing than raw HTTP).
+debug: false
+head: false
+leakless: true            # always close browser instances after a search
+timeout: 20               # per-request fail timeout (seconds)
+
+# Resilience -----------------------------------------------------------------
+max_retries: 2            # retry a transient failure twice
+allow_endpoint_fallback: true   # if /google captchas, fall back to yandex/baidu
+
+# Circuit breaker: stop hammering an engine that keeps failing (e.g. Google
+# captcha) and retry it later.
+cb_failures: 3            # consecutive failures before the circuit opens
+cb_recovery: 120          # seconds before trying the engine again
+cb_successes: 2           # successes (half-open) needed to close the circuit
+
+# Response cache inside openserp (on top of HD-Search's own Redis cache).
+cache_ttl: 600            # seconds (0 disables)
+cache_max_size: 2000
+
+# Anti-blocking (recommended for production) ---------------------------------
+# Datacenter IPs get captcha'd by Google. To make Google usable, supply EITHER
+# residential/rotating proxies OR a 2captcha key. Both are optional; without them
+# HD-Search routes to Yandex/Baidu (HDSEARCH_OPENSERP_ENGINES=yandex,baidu).
+#
+# proxies:
+#   global: "http://user:pass@residential-proxy:8000"
+#   google: "http://user:pass@other-proxy:8000"
+# 2captcha_key: "<your 2captcha api key>"

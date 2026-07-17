@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env
+.env.prod
+*.log
+.DS_Store
+next-env.d.ts
+.hdsearch-secrets.json

@@ -1,0 +1,54 @@
+diff --git a/node_modules/@assistant-ui/core/dist/react/runtimes/cloud/useCloudThreadListAdapter.js b/node_modules/@assistant-ui/core/dist/react/runtimes/cloud/useCloudThreadListAdapter.js
+index 29a5cc1..432d8fa 100644
+--- a/node_modules/@assistant-ui/core/dist/react/runtimes/cloud/useCloudThreadListAdapter.js
++++ b/node_modules/@assistant-ui/core/dist/react/runtimes/cloud/useCloudThreadListAdapter.js
+@@ -12,6 +12,7 @@ const autoCloud = baseUrl
+     : undefined;
+ export const useCloudThreadListAdapter = (adapter) => {
+     const adapterRef = useRef(adapter);
++    const stableInMemoryRef = useRef(null);
+     useEffect(() => {
+         adapterRef.current = adapter;
+     }, [adapter]);
+@@ -31,13 +32,15 @@ export const useCloudThreadListAdapter = (adapter) => {
+     }, []);
+     const cloud = adapter.cloud ?? autoCloud;
+     if (!cloud) {
+-        const ref = adapterRef;
+-        const inMemory = new InMemoryThreadListAdapter();
+-        inMemory.initialize = async (threadId) => {
+-            const result = await ref.current.create?.();
+-            return { remoteId: threadId, externalId: result?.externalId };
+-        };
+-        return inMemory;
++        if (!stableInMemoryRef.current) {
++            const inMemory = new InMemoryThreadListAdapter();
++            inMemory.initialize = async (threadId) => {
++                const result = await adapterRef.current.create?.();
++                return { remoteId: threadId, externalId: result?.externalId };
++            };
++            stableInMemoryRef.current = inMemory;
++        }
++        return stableInMemoryRef.current;
+     }
+     return {
+         list: async () => {
+diff --git a/node_modules/@assistant-ui/core/dist/react/runtimes/useLocalRuntime.js b/node_modules/@assistant-ui/core/dist/react/runtimes/useLocalRuntime.js
+index 0d2fe39..9c461d1 100644
+--- a/node_modules/@assistant-ui/core/dist/react/runtimes/useLocalRuntime.js
++++ b/node_modules/@assistant-ui/core/dist/react/runtimes/useLocalRuntime.js
+@@ -27,10 +27,12 @@ const useLocalThreadRuntime = (chatModel, { initialMessages, ...options }) => {
+             runtime.threads.getMainThreadRuntimeCore().detach();
+         };
+     }, [runtime]);
++    const optRef = useRef(opt);
++    optRef.current = opt;
+     useEffect(() => {
+-        runtime.threads.getMainThreadRuntimeCore().__internal_setOptions(opt);
++        runtime.threads.getMainThreadRuntimeCore().__internal_setOptions(optRef.current);
+         runtime.threads.getMainThreadRuntimeCore().__internal_load();
+-    });
++    }, [runtime]);
+     useEffect(() => {
+         if (!modelContext)
+             return undefined;

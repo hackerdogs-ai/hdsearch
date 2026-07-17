@@ -1,0 +1,464 @@
+{
+  "$schema": "LLM Provider Registry — defines all supported LLM providers, models, pricing, capabilities, and plan-level access gating for hd-search AI Mode.",
+  "providers": [
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "description": "Claude family of AI models — flagship provider for hd-search AI Mode.",
+      "website": "https://www.anthropic.com",
+      "docsUrl": "https://docs.anthropic.com",
+      "accessType": "commercial",
+      "keyFields": ["anthropic"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "claude-opus-4-8",
+          "label": "Claude Opus 4.8",
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "inputPer1M": 5.0,
+          "outputPer1M": 25.0,
+          "cachedInputPer1M": 0.5,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 1,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "claude-opus-4-7",
+          "label": "Claude Opus 4.7",
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "inputPer1M": 5.0,
+          "outputPer1M": 25.0,
+          "cachedInputPer1M": 0.5,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 2,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "claude-sonnet-4-6",
+          "label": "Claude Sonnet 4.6",
+          "contextTokens": 1000000,
+          "maxOutputTokens": 64000,
+          "inputPer1M": 3.0,
+          "outputPer1M": 15.0,
+          "cachedInputPer1M": 0.3,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 3,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "claude-haiku-4-5",
+          "label": "Claude Haiku 4.5",
+          "contextTokens": 200000,
+          "maxOutputTokens": 64000,
+          "inputPer1M": 1.0,
+          "outputPer1M": 5.0,
+          "cachedInputPer1M": 0.1,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 4,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "claude-fable-5",
+          "label": "Claude Fable 5",
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "inputPer1M": 10.0,
+          "outputPer1M": 50.0,
+          "cachedInputPer1M": 1.0,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 5,
+          "enabled": true,
+          "plans": ["production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "description": "GPT and o-series models from OpenAI.",
+      "website": "https://openai.com",
+      "docsUrl": "https://platform.openai.com/docs",
+      "accessType": "commercial",
+      "keyFields": ["openai"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "gpt-4.1",
+          "label": "GPT-4.1",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 2.0,
+          "outputPer1M": 8.0,
+          "cachedInputPer1M": 0.5,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 10,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "label": "GPT-4.1 Mini",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.4,
+          "outputPer1M": 1.6,
+          "cachedInputPer1M": 0.1,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 11,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "gpt-4.1-nano",
+          "label": "GPT-4.1 Nano",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.1,
+          "outputPer1M": 0.4,
+          "cachedInputPer1M": 0.025,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 12,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "o3",
+          "label": "o3",
+          "contextTokens": 200000,
+          "maxOutputTokens": 100000,
+          "inputPer1M": 2.0,
+          "outputPer1M": 8.0,
+          "cachedInputPer1M": 0.5,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 13,
+          "enabled": true,
+          "plans": ["devtest", "production", "enterprise"]
+        },
+        {
+          "id": "o4-mini",
+          "label": "o4-mini",
+          "contextTokens": 200000,
+          "maxOutputTokens": 100000,
+          "inputPer1M": 1.1,
+          "outputPer1M": 4.4,
+          "cachedInputPer1M": 0.275,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 14,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "xai",
+      "name": "xAI (Grok)",
+      "description": "Grok models from xAI — fast reasoning with real-time knowledge.",
+      "website": "https://x.ai",
+      "docsUrl": "https://docs.x.ai",
+      "accessType": "commercial",
+      "keyFields": ["xai"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "grok-3",
+          "label": "Grok 3",
+          "contextTokens": 131072,
+          "maxOutputTokens": 16384,
+          "inputPer1M": 3.0,
+          "outputPer1M": 15.0,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": false, "thinking": true, "streaming": true },
+          "defaultRank": 15,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "grok-3-mini",
+          "label": "Grok 3 Mini",
+          "contextTokens": 131072,
+          "maxOutputTokens": 16384,
+          "inputPer1M": 0.3,
+          "outputPer1M": 0.5,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": false, "thinking": true, "streaming": true },
+          "defaultRank": 16,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "google",
+      "name": "Google",
+      "description": "Gemini models from Google DeepMind.",
+      "website": "https://ai.google.dev",
+      "docsUrl": "https://ai.google.dev/gemini-api/docs",
+      "accessType": "commercial",
+      "keyFields": ["google"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "gemini-2.5-pro",
+          "label": "Gemini 2.5 Pro",
+          "contextTokens": 1048576,
+          "maxOutputTokens": 65536,
+          "inputPer1M": 1.25,
+          "outputPer1M": 10.0,
+          "cachedInputPer1M": 0.31,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 20,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "label": "Gemini 2.5 Flash",
+          "contextTokens": 1048576,
+          "maxOutputTokens": 65536,
+          "inputPer1M": 0.15,
+          "outputPer1M": 0.6,
+          "cachedInputPer1M": 0.0375,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 21,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "aws_bedrock",
+      "name": "AWS Bedrock",
+      "description": "Access foundation models through AWS Bedrock — enterprise-grade with VPC isolation.",
+      "website": "https://aws.amazon.com/bedrock",
+      "docsUrl": "https://docs.aws.amazon.com/bedrock",
+      "accessType": "commercial",
+      "keyFields": ["aws_access_key"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "us.anthropic.claude-sonnet-4-6-20250514-v1:0",
+          "label": "Claude Sonnet 4.6 (Bedrock)",
+          "contextTokens": 200000,
+          "maxOutputTokens": 64000,
+          "inputPer1M": 3.0,
+          "outputPer1M": 15.0,
+          "cachedInputPer1M": 0.3,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 50,
+          "enabled": true,
+          "plans": ["devtest", "production", "enterprise"]
+        },
+        {
+          "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+          "label": "Claude Haiku 4.5 (Bedrock)",
+          "contextTokens": 200000,
+          "maxOutputTokens": 64000,
+          "inputPer1M": 1.0,
+          "outputPer1M": 5.0,
+          "cachedInputPer1M": 0.1,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 51,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "azure",
+      "name": "Azure OpenAI",
+      "description": "OpenAI models hosted on Microsoft Azure — enterprise compliance and data residency.",
+      "website": "https://azure.microsoft.com/en-us/products/ai-services/openai-service",
+      "docsUrl": "https://learn.microsoft.com/en-us/azure/ai-services/openai",
+      "accessType": "commercial",
+      "keyFields": ["azure_openai"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "gpt-4.1",
+          "label": "GPT-4.1 (Azure)",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 2.0,
+          "outputPer1M": 8.0,
+          "cachedInputPer1M": 0.5,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 55,
+          "enabled": true,
+          "plans": ["devtest", "production", "enterprise"]
+        },
+        {
+          "id": "gpt-4.1-mini",
+          "label": "GPT-4.1 Mini (Azure)",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.4,
+          "outputPer1M": 1.6,
+          "cachedInputPer1M": 0.1,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 56,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "description": "Unified API gateway to 200+ models from multiple providers — single key, automatic fallback.",
+      "website": "https://openrouter.ai",
+      "docsUrl": "https://openrouter.ai/docs",
+      "accessType": "commercial",
+      "keyFields": ["openrouter"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "anthropic/claude-sonnet-4",
+          "label": "Claude Sonnet 4 (OpenRouter)",
+          "contextTokens": 200000,
+          "maxOutputTokens": 64000,
+          "inputPer1M": 3.0,
+          "outputPer1M": 15.0,
+          "cachedInputPer1M": 0.3,
+          "capabilities": { "tools": true, "vision": true, "thinking": true, "streaming": true },
+          "defaultRank": 60,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "openai/gpt-4.1-mini",
+          "label": "GPT-4.1 Mini (OpenRouter)",
+          "contextTokens": 1047576,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.4,
+          "outputPer1M": 1.6,
+          "cachedInputPer1M": 0.1,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 61,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "description": "Ultra-fast inference on open-source models via Groq's LPU hardware.",
+      "website": "https://groq.com",
+      "docsUrl": "https://console.groq.com/docs",
+      "accessType": "commercial",
+      "keyFields": ["groq"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "llama-3.3-70b-versatile",
+          "label": "Llama 3.3 70B (Groq)",
+          "contextTokens": 131072,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.59,
+          "outputPer1M": 0.79,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": false, "thinking": false, "streaming": true },
+          "defaultRank": 30,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        },
+        {
+          "id": "llama-4-maverick-17b-128e-instruct",
+          "label": "Llama 4 Maverick (Groq)",
+          "contextTokens": 131072,
+          "maxOutputTokens": 32768,
+          "inputPer1M": 0.5,
+          "outputPer1M": 0.77,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 31,
+          "enabled": true,
+          "plans": ["dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral AI",
+      "description": "Open-weight and proprietary models from Mistral AI.",
+      "website": "https://mistral.ai",
+      "docsUrl": "https://docs.mistral.ai",
+      "accessType": "commercial",
+      "keyFields": ["mistral"],
+      "supportsStreaming": true,
+      "models": [
+        {
+          "id": "mistral-large-latest",
+          "label": "Mistral Large",
+          "contextTokens": 131072,
+          "maxOutputTokens": 8192,
+          "inputPer1M": 2.0,
+          "outputPer1M": 6.0,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": true, "thinking": false, "streaming": true },
+          "defaultRank": 40,
+          "enabled": true,
+          "plans": ["devtest", "production", "enterprise"]
+        },
+        {
+          "id": "mistral-small-latest",
+          "label": "Mistral Small",
+          "contextTokens": 131072,
+          "maxOutputTokens": 8192,
+          "inputPer1M": 0.1,
+          "outputPer1M": 0.3,
+          "cachedInputPer1M": 0.0,
+          "capabilities": { "tools": true, "vision": false, "thinking": false, "streaming": true },
+          "defaultRank": 41,
+          "enabled": true,
+          "plans": ["free", "dev", "devtest", "production", "enterprise"]
+        }
+      ]
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama (Local)",
+      "description": "Self-hosted local LLMs via Ollama — no API key, no cost. Models discovered dynamically from your Ollama instance.",
+      "website": "https://ollama.com",
+      "docsUrl": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+      "accessType": "self-hosted",
+      "keyFields": [],
+      "supportsStreaming": true,
+      "dynamic": true,
+      "models": []
+    }
+  ],
+  "planAccess": {
+    "free": {
+      "description": "Access to cost-effective models only",
+      "maxModels": 5,
+      "defaultModel": "claude-haiku-4-5"
+    },
+    "dev": {
+      "description": "Access to mid-tier and cost-effective models",
+      "maxModels": 15,
+      "defaultModel": "claude-sonnet-4-6"
+    },
+    "devtest": {
+      "description": "Access to most models including reasoning",
+      "maxModels": null,
+      "defaultModel": "claude-opus-4-8"
+    },
+    "production": {
+      "description": "Full access to all models",
+      "maxModels": null,
+      "defaultModel": "claude-opus-4-8"
+    },
+    "enterprise": {
+      "description": "Full access to all models + custom configurations",
+      "maxModels": null,
+      "defaultModel": "claude-opus-4-8"
+    }
+  }
+}

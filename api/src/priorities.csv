@@ -1,0 +1,32 @@
+# HD-Search provider priority list.
+# Column 1 = priority (lower is tried first). Column 2 = provider id. Column 3 = enabled.
+# Free / self-hosted are ranked ABOVE commercial by default (spec §7).
+# Hot-reloaded every HDSEARCH_PRIORITY_RELOAD_SEC seconds — no redeploy needed.
+priority,provider_id,enabled
+# --- search: free / self-hosted (highest priority) ---
+# searxng first: fast local meta-search. openserp scrapes Google directly and is
+# frequently captcha'd, so it sits just below as a secondary.
+10,searxng,true
+20,openserp,true
+30,duckduckgo,true
+60,wikipedia,true
+65,gdelt,true
+80,commoncrawl,true
+# --- darkweb ---
+100,ahmia,true
+110,torch,true
+300,intelx,true
+# --- search: commercial (need per-user / dev keys) ---
+200,brave,true
+210,serpapi,true
+220,serper,true
+230,tavily,true
+240,exa,true
+245,kagi,true
+250,google_cse,true
+# --- crawl: self-hosted / free first, commercial last ---
+10,crawl4ai,true
+30,browserless,true
+40,jina_reader,true
+210,firecrawl,true
+990,basic,true
