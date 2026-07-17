@@ -10,21 +10,39 @@ TypeScript throughout.
 
 The self-hosted stack bundles everything it needs — Postgres/TimescaleDB, Redis
 (RediSearch), SeaweedFS, a local embeddings model, and all the search/crawl
-providers — on its own Docker network. Nothing external required.
+providers — on its own Docker network. Nothing external required, and **nothing
+to configure to start**:
 
 ```bash
-cp .env.selfhost.example .env.selfhost      # then set the 3 secrets (openssl rand -hex 32)
-docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
+docker compose -f docker-compose.selfhost.yml up -d --build
 # open http://localhost:3000  →  first run prompts you to create the admin account
 ```
 
+That's the whole setup. There are **no secrets to put in a config file**:
+
+- **Crypto secrets are automatic.** The app's encryption / session / internal
+  secrets are generated on first boot and stored in the `hds-secrets` Docker
+  volume — you never set them. (Only if you care about disaster recovery: back up
+  that volume so stored provider keys survive a full `docker compose down -v`.)
+- **Create the admin in the browser.** First run shows a "create admin account"
+  screen; that account is the administrator. (Or set `HDSEARCH_ADMIN_EMAIL` +
+  `HDSEARCH_ADMIN_PASSWORD` to create it headlessly.)
+- **Add provider API keys in the UI** (OpenAI, Brave, SerpAPI, …) — Account →
+  Provider Keys for your own keys, or Dashboard → System Admin for system-wide
+  keys. They're stored encrypted in the database, never in a file.
 - **No SaaS.** No Auth0, no Stripe, no plans/credits/quotas — everything is
-  unlimited. Auth is **local email + password** stored in your own database; the
-  first account you create becomes the admin (set `HDSEARCH_ADMIN_EMAIL` /
-  `HDSEARCH_ADMIN_PASSWORD` to bootstrap it headlessly instead).
-- **Optional headless admin, open signup, and per-service tuning** via
-  `.env.selfhost`. See [`docs/OPEN_SOURCE_MIGRATION.md`](docs/OPEN_SOURCE_MIGRATION.md)
-  for the full self-host architecture and configuration.
+  unlimited.
+
+**Optional** tuning (host ports, public URL, open signup) lives in
+`.env.selfhost.example` — copy it only if you need to change a default:
+
+```bash
+cp .env.selfhost.example .env.selfhost   # edit ports/URLs/flags (no secrets)
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
+```
+
+See [`docs/OPEN_SOURCE_MIGRATION.md`](docs/OPEN_SOURCE_MIGRATION.md) for the full
+self-host architecture (incl. the secrets model).
 
 > The other `docker-compose.yml` in this repo targets a pre-existing shared
 > `hdnet` infrastructure and is **not** the self-host path — use

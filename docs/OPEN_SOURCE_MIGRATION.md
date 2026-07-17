@@ -103,10 +103,12 @@ shared `hdnet` infra — is left untouched, per project constraint).
 ### Run it
 
 ```
-cp .env.selfhost.example .env.selfhost        # then edit the 3 secrets
-docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
-open http://localhost:3000                    # sign in via dev-login (any email)
+docker compose -f docker-compose.selfhost.yml up -d --build   # no config needed
+open http://localhost:3000                    # first run: create the admin account
 ```
+
+No secrets to set (see "Secrets model" below). Copy `.env.selfhost.example` only
+to change non-secret defaults (ports/URLs/flags), then add `--env-file .env.selfhost`.
 
 > First `up` pulls several GB (embeddings + browsers + providers) and builds the
 > api/web images; the embeddings image is amd64 (emulated on Apple Silicon).
