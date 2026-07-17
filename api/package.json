@@ -17,7 +17,8 @@
     "keys": "tsx scripts/hds-keys.ts",
     "migrate": "tsx scripts/migrate.ts",
     "mcp": "tsx mcp/server.ts",
-    "test:api": "tsx scripts/api-test.ts"
+    "test:api": "tsx scripts/api-test.ts",
+    "test:mcp": "tsx scripts/mcp-test.ts"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.121",
