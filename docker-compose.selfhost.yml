@@ -279,6 +279,13 @@ services:
       - MCP_PORT=8792
     ports:
       - "${MCP_PORT:-8792}:8792"
+    # Override the api image's healthcheck (it probes :8791) — MCP serves on :8792.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8792/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       hds-api:
         condition: service_healthy
