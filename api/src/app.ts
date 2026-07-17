@@ -21,7 +21,7 @@ import { openaiRoutes } from './routes/openai-compat.js';
 import { trendsRoutes } from './routes/trends.js';
 import { plansRoutes } from './routes/plans.js';
 import { authLocalRoutes } from './routes/auth-local.js';
-// Billing is retired — plans/billing are owned by hackerdogs-core (see docs/AUTH_PLAN_INTEGRATION.md).
+// Billing is retired — no plans/credits/quotas in the open-source build (see docs/OPEN_SOURCE_MIGRATION.md).
 
 export function buildApp(): Hono {
   const app = new Hono();

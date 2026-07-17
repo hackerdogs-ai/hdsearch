@@ -47,7 +47,7 @@ We ship the first slice as **personal file search** — Google Drive and OneDriv
 | G5 | **Per‑user MCP registry** — connected apps' MCP tools flow into the AI orchestrator per user (supersedes env‑only `HDSEARCH_MCP_SERVERS` for user connectors; env config remains for global/admin servers). |
 | G6 | **Catalog of 25 highest‑impact apps** (see §A.9) with a plugin architecture so a new connector is ~one file (mirrors the search‑provider plugin model). |
 | G7 | **Security first** — least‑privilege scopes, read‑only default, tokens never in model context, per‑user isolation, revoke/disconnect, audit. |
-| G8 | **Billing parity** — connected‑app search and MCP tool calls meter credits like existing search / AI runs. |
+| G8 | **Free & unlimited** — connected‑app search and MCP tool calls are unlimited and free, like the rest of HD‑Search; no metering or plan gating (usage recorded for telemetry only). |
 
 ### A.4 Non‑goals (this phase)
 
@@ -63,7 +63,7 @@ We ship the first slice as **personal file search** — Google Drive and OneDriv
 | **Knowledge worker** | "Find that spec" across Drive, OneDrive, Notion, Slack without switching apps. |
 | **Developer** | Search GitHub code/issues + Jira/Linear from one box; use them as AI tools. |
 | **Support/ops** | Search Zendesk/Intercom tickets and Confluence runbooks; triage with AI. |
-| **AI/agent builder** | Connect apps once; have their MCP tools available to AI Mode with credit metering. |
+| **AI/agent builder** | Connect apps once; have their MCP tools available to AI Mode, unlimited and free. |
 | **Privacy‑conscious user** | Read‑only scopes, clear consent, one‑click disconnect, no server‑side copy of content. |
 
 ### A.6 User‑facing requirements
@@ -79,11 +79,11 @@ We ship the first slice as **personal file search** — Google Drive and OneDriv
    - One query fans out to the user's connected apps that expose Search; results are normalized, deduplicated, and merged with source attribution (app logo + name), ranked by relevance/recency. Per‑app facet in the facet rail. Respect each app's permissions — results are always scoped to what the signed‑in user can access.
    - Per‑app failures degrade gracefully (skip + surface a subtle "X unavailable" chip), never fail the whole query — mirrors the MCP registry's "dead server → skip" behavior in `api/src/ai/mcp/registry.ts`.
 4. **AI Mode integration**
-   - Connected apps with an MCP capability appear in the AI Mode tools/MCP affordance; their tools are offered to the orchestrator (subject to the existing semantic tool‑selection, AI_MODE_SPEC §8) and metered in credits.
+   - Connected apps with an MCP capability appear in the AI Mode tools/MCP affordance; their tools are offered to the orchestrator (subject to the existing semantic tool‑selection, AI_MODE_SPEC §8).
 5. **Manage & revoke**
    - Dashboard page (`/dashboard/apps` or under Integrations) lists connections, granted scopes, last used; supports Disconnect (revoke + delete tokens) and Reconnect (re‑auth / scope upgrade).
-6. **Plan gating**
-   - Free tier: connect + search a small number of apps (e.g. 1–2) with rate caps; paid tiers unlock more connections, higher limits, and (later) indexing. Align with existing plan entitlements (`api/src/entitlements.ts`, `plans.ts`).
+6. **No plan gating**
+   - All connectors are available to every user, unlimited and free; per‑user rate limits protect upstreams and the instance. No tiers or entitlements.
 
 ### A.7 Success metrics
 
@@ -91,7 +91,7 @@ We ship the first slice as **personal file search** — Google Drive and OneDriv
 
 ### A.8 Requirements summary (MoSCoW)
 
-- **Must:** Apps tab + catalog; OAuth + API‑key connect; encrypted per‑user tokens; Google Drive + OneDrive federated file search; per‑user MCP registry feeding AI Mode; disconnect/revoke; credit metering; graceful per‑app degradation.
+- **Must:** Apps tab + catalog; OAuth + API‑key connect; encrypted per‑user tokens; Google Drive + OneDrive federated file search; per‑user MCP registry feeding AI Mode; disconnect/revoke; graceful per‑app degradation.
 - **Should:** GitHub, Slack, Notion, Gmail, Confluence, Jira, Dropbox connectors; catalog filters; facets; scope‑upgrade reconnect.
 - **Could:** remaining wave‑2/3 connectors (§A.9); saved cross‑app searches; per‑app result previews.
 - **Won't (v1):** background indexing/RAG; write actions by default; org‑shared connections; unified‑API reseller dependency.
@@ -165,7 +165,7 @@ Impact = breadth of user content that becomes searchable × demand × availabili
         native app search API     per‑user MCP registry ──► AI orchestrator (ai/orchestrator.ts)
         (Drive, Graph, Slack…)    (mcp/registry.ts, mcp/client.ts)
                 │                       │
-        normalize.ts  ──► results[]     tools[] ──► credits meter
+        normalize.ts  ──► results[]     tools[] ──► usage telemetry
                                         │
                 encrypted keystore (crypto.ts / keystore.ts) ◄─ OAuth tokens & API keys (per user)
 ```
@@ -212,11 +212,10 @@ export interface Connector {
   capabilities: ConnectorCapability[];
   search?: SearchCapability;
   mcp?: McpCapability;
-  entitlement?: string;       // plan gate key
 }
 ```
 
-`ConnCtx` carries `{ userId, planId, resolveToken(): Promise<string> }` where `resolveToken` decrypts the per‑user token from the keystore and transparently **refreshes OAuth access tokens** when expired.
+`ConnCtx` carries `{ userId, resolveToken(): Promise<string> }` where `resolveToken` decrypts the per‑user token from the keystore and transparently **refreshes OAuth access tokens** when expired.
 
 `NormalizedResult` reuses the existing search result shape (see `api/src/normalize.ts` / `api/src/types.ts`): `{ title, url, snippet, source, publishedAt?, thumbnail?, meta }`, with `source` set to the connector `id` and `meta` carrying app‑specific fields (mimeType, author, channel, repo, ticketStatus…).
 
@@ -234,13 +233,13 @@ POST /v1/apps/search
 ```
 
 Behavior (implementation compliance rule §1/§2 — never crash, log at choke points):
-- Resolve the user's connected, search‑capable apps (intersect with `apps` filter + plan entitlement).
+- Resolve the user's connected, search‑capable apps (intersect with `apps` filter).
 - Fan out with `Promise.allSettled`; each connector wraps its own call in try/except, returns `[]` on failure, and is logged with `logger.warn`. One dead app never breaks the response.
 - Normalize → dedup (by url/id) → merge/rank (recency + relevance) → paginate.
-- Meter credits per app query (reuse `charge-credits.ts` / `credit-costs.ts`).
+- Record per‑app query usage for telemetry (best‑effort; no metering/charge).
 - Cache per `(userId, app, q, page)` in Redis with a short TTL (personal data → short/opt‑out; reuse `cache.ts` with per‑source TTL and a privacy flag so sensitive apps skip cache).
 
-`GET /v1/apps/catalog` returns the static connector catalog (id, label, category, capabilities, auth kind, entitlement) + per‑user connection status. `GET/POST/DELETE /v1/apps/connections` manage connections. OAuth: `GET /v1/apps/:id/oauth/start` → redirect; `GET /v1/apps/oauth/callback` → exchange code, encrypt+store tokens.
+`GET /v1/apps/catalog` returns the static connector catalog (id, label, category, capabilities, auth kind) + per‑user connection status. `GET/POST/DELETE /v1/apps/connections` manage connections. OAuth: `GET /v1/apps/:id/oauth/start` → redirect; `GET /v1/apps/oauth/callback` → exchange code, encrypt+store tokens.
 
 ### B.4 Per‑user MCP registry (evolves existing code)
 
@@ -331,11 +330,11 @@ These slot straight into the existing `mcp/client.ts` (Streamable HTTP / SSE). T
 **Unified‑API alternative (backlog, not a v1 dependency):** vendors like **Truto** (`api.truto.one/unified/search`, ~41 providers), **Unified.to** (460+ integrations, normalized `storage_file` / `kms_page` / `messaging_message` / `ticketing_ticket`), **Merge**, and **Apideck** offer one normalized search across many apps. We could add a single "unified" meta‑connector to expand coverage fast; trade‑off is a third‑party dependency + data‑handling review vs. our native‑first / self‑hostable posture (PRD.md). Keep native connectors as the default; treat unified APIs as an optional accelerator.
 
 ### B.8 Later phase — optional indexing / RAG
-v1 is live pass‑through. A later phase MAY add **opt‑in** per‑user indexing: fetch → chunk (~512 tokens, overlap) → embed with the existing MiniLM embedder (`embeddings.ts`) → store in Redis/vector (`vector.ts`) with `{connection_id, object_type, updated_at}` → semantic retrieval + RAG grounding in AI Mode. Gated by plan + explicit consent; sync via provider webhooks where available. Reuses the AI‑Mode vector‑tool‑selection infrastructure (AI_MODE_SPEC §8).
+v1 is live pass‑through. A later phase MAY add **opt‑in** per‑user indexing: fetch → chunk (~512 tokens, overlap) → embed with the existing MiniLM embedder (`embeddings.ts`) → store in Redis/vector (`vector.ts`) with `{connection_id, object_type, updated_at}` → semantic retrieval + RAG grounding in AI Mode. Gated by explicit consent; sync via provider webhooks where available. Reuses the AI‑Mode vector‑tool‑selection infrastructure (AI_MODE_SPEC §8).
 
 ### B.9 Rollout / milestones
 
-1. **M1 — Framework + files:** connector interface, catalog API + Apps tab UI, OAuth + API‑key flows, encrypted connections store, **Google Drive** + **OneDrive** federated search, credit metering, disconnect/revoke.
+1. **M1 — Framework + files:** connector interface, catalog API + Apps tab UI, OAuth + API‑key flows, encrypted connections store, **Google Drive** + **OneDrive** federated search, disconnect/revoke.
 2. **M2 — Per‑user MCP:** evolve `mcp/config.ts`/`registry.ts` to per‑user; connect **GitHub / Notion / Atlassian / Linear** remote MCP; tools flow into AI Mode.
 3. **M3 — Wave‑1 search connectors:** Gmail, Slack, Notion (native), Confluence, Jira, Dropbox; facets + dedup polish.
 4. **M4 — Wave 2:** Box, Calendar, Teams, Asana, Zendesk, Intercom, Salesforce, HubSpot, Monday.
@@ -344,10 +343,8 @@ v1 is live pass‑through. A later phase MAY add **opt‑in** per‑user indexin
 ### B.10 Open questions
 
 - **Search vs. MCP overlap:** for apps offering both, is federated search a native call or a call *through* the app's MCP `search` tool? (Default: native for search‑capable connectors; MCP for tool use — avoids double implementation where the vendor's MCP already exposes a good search tool.)
-- **Credit pricing** per connected‑app query and per MCP tool call (align with `credit-costs.ts`).
-- **OAuth app registration** overhead: each OAuth connector needs a registered client (client id/secret) per provider — track setup + secret storage (server‑side env / secrets manager).
+- **OAuth app registration** overhead: each OAuth connector needs a registered client (client id/secret) per provider — track setup + secret storage (server‑side, encrypted in the DB / `hds-secrets` volume).
 - **Caching personal data:** default TTL and per‑app opt‑out; which apps must never cache.
-- **Plan entitlements:** connection count + query limits per tier.
 
 ---
 

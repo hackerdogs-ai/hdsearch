@@ -2,7 +2,7 @@
 // hackerdogs-core JWT + Auth0 refresh token, so it is ENCRYPTED with AES-256-GCM (not just
 // signed) — authenticated encryption gives confidentiality (tokens aren't readable from the
 // cookie) and integrity (tamper-evident) in one. httpOnly + Secure keep it out of JS and
-// off plaintext transports. See docs/AUTH_PLAN_INTEGRATION.md.
+// off plaintext transports. See docs/OPEN_SOURCE_MIGRATION.md.
 import 'server-only';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';

@@ -1,6 +1,6 @@
-// Per-provider credit cost map. Each operation (search, crawl, vector, ai) costs
-// N credits based on the provider used. Credits are deducted centrally via the
-// hackerdogs-core billing API. See docs/CREDIT_MODEL.csv for the financial model.
+// Per-provider credit cost map (retained for display/telemetry only). In the
+// open-source build credits are NOT charged — chargeUserCredits() is a no-op.
+// See docs/OPEN_SOURCE_MIGRATION.md.
 //
 // Pricing rationale: free/self-hosted providers cost 1 credit (infra overhead);
 // commercial providers are priced to cover their retail API cost + margin.

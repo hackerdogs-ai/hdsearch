@@ -3,7 +3,8 @@
 // resolves the user's plan SKU from core GET /auth/me — exactly the identity worldmonitor
 // gets from token-exchange, but fetched by Bearer JWT for a server-side API. Plan is cached
 // briefly per user. Degrades gracefully (→ free) if the secret or endpoint is unavailable,
-// so this is safe to ship before the core /auth/me PR lands. See docs/AUTH_PLAN_INTEGRATION.md.
+// so this is safe to ship before the core /auth/me PR lands. (Legacy; the
+// open-source self-host build uses local auth, not core.) See docs/OPEN_SOURCE_MIGRATION.md.
 import { verify } from 'hono/jwt';
 import { env } from './env.js';
 import { log, errFields } from './logger.js';

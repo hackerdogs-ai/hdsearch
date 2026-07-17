@@ -90,7 +90,7 @@ Three deliverables:
 | Redis + resiliency | `store.ts` (`redis`, `redisHealthy()`, `k()`), health flag | Job queue + status live here; all reads guard on `redisHealthy()`. |
 | Postgres | `db.ts` (`query`/`tryQuery` never-throw), `schema.sql` idempotent | New `hd_search.files` + `hd_search.folders`. |
 | Thread persistence & delete | `ai-threads.ts` (`deleteAiThread`, `clearAiThreads`, S3 cascade) | File cascade hooks into `deleteAiThread` / `clearAiThreads`. |
-| Auth/quota/credits | `auth.ts` (`requireAuth`, `requireScope`, `principal`, `isDemoUser`), `credits.ts`, quota | Upload gated by scope + plan quota; processing metered like `vector`. |
+| Auth | `auth.ts` (`requireAuth`, `requireScope`, `principal`, `isDemoUser`) | Upload gated by scope only; usage is unlimited and free (no quota/credits). |
 | Logging | `logger.ts` (`log`, `errFields`) | All stages log structured events with `fileId`/`rid`. |
 | Frontend runtime | assistant-ui `useRemoteThreadListRuntime` + `hd-search-sse-adapter.ts` + `hd-thread-list-adapter.tsx` | Composer attachments; chat body carries `fileIds`. |
 | Sidebar | `experience-left-sidebar.tsx` (`CollapsibleSection`, `SearchesList`, `ThreadListItem`) | Add search box, paging, folder grouping. |
@@ -108,7 +108,7 @@ Browser (assistant-ui composer)
 Next.js BFF  /api/files, /api/files/[id]      ── injects X-HD-Internal / JWT, streams body
   ▼
 API  POST /v1/files            (routes/files.ts)
-  ├─ validate (size/type/quota) ─ reject early
+  ├─ validate (size/type) ─ reject early
   ├─ stream raw → S3  files/<userId>/<threadId>/<fileId>/raw/<name>
   ├─ INSERT hd_search.files  (status='queued')            ── source of truth
   ├─ enqueue job → Redis  hds:files:jobs (durable)        ── crash-proof
@@ -272,7 +272,7 @@ Auth: `requireAuth()` + `requireScope('vector:read')`; demo/anonymous get `403`/
 ### C.8 Processing SLA & metering
 
 - Enqueue→`ready` target: small docs < 5 s; 150 MB PDF < ~2 min (OCR excluded/time-boxed). Targets, not guarantees; chat never blocks on them.
-- Metered like a `vector` op via `recordUsage` (best-effort); credits per processed file/MB via a new `file_process` line item in `credit-costs.ts`. Quota enforced at upload.
+- Usage recorded like a `vector` op via `recordUsage` (best-effort, for telemetry). No metering, credits, or quota — processing is unlimited and free.
 
 ### C.9 Security & privacy
 
@@ -281,7 +281,7 @@ Auth: `requireAuth()` + `requireScope('vector:read')`; demo/anonymous get `403`/
 - **Magic-byte sniffing:** never trust client `mime`; re-derive from magic bytes; reject executables by policy config.
 - **AV hook:** `HDSEARCH_FILE_AV_URL` optional; positive scan → file `failed` (quarantined), no indexing.
 - **Logging:** file names/previews logged at `debug` only, never `info`; errors redacted (per `ai-threads.ts` privacy note).
-- **DoS:** 200 MB hard cap, per-user concurrent-upload cap, per-plan quota, worker concurrency cap.
+- **DoS:** 200 MB hard cap, per-user concurrent-upload cap, per-user rate limit, worker concurrency cap.
 
 ### C.10 Failure & degradation
 

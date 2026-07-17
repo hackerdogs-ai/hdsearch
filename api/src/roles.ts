@@ -1,7 +1,8 @@
 // RBAC inheritance from hackerdogs-core. The core JWT carries the user's role names
 // (e.g. "hd_super", "tenant_admin", "data_analyst"); hd-search maps those to its own
 // capability set. Admin roles get the platform-admin scope + unlimited quota; everyone
-// else is a standard user on their plan. See docs/AUTH_PLAN_INTEGRATION.md.
+// else is a standard user. (Local self-host auth derives admin from the DB role
+// column instead of core JWT roles.) See docs/OPEN_SOURCE_MIGRATION.md.
 import type { Scope } from './apikeys.js';
 
 export type HdRole = 'admin' | 'user';

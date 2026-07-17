@@ -31,8 +31,8 @@ caching, faceting, and a plugin system so new providers are a single file.
 - **Free/self-hosted first**; commercial providers use **per-user encrypted keys**
   (dev `.env` fallback only when `RUN_MODE=dev`).
 - **Redis cache** with per-source TTL as the primary anti-blocking mechanism.
-- **Web product**: marketing home with faceted search, Auth0 login, dashboard,
-  search history, account (API keys + provider keys), plans/billing (Stripe),
+- **Web product**: marketing home with faceted search, local email+password login,
+  dashboard, search history, account (API keys + provider keys),
   integrations (MCP/API), docs, services.
 - **Metrics** in TimescaleDB; **least-privilege** DB roles; **encryption at rest**.
 
@@ -59,30 +59,18 @@ caching, faceting, and a plugin system so new providers are a single file.
 2. **Crawl API** — `POST /v1/crawl` with `url`, `formats[]`, `render`, `store`.
    Returns markdown/text/html/links/images; optional S3 archival.
 3. **Vector** — `POST /v1/search/vector/index` (embed+store, TTL default 24h) and
-   `POST /v1/search/vector` (KNN; optional `groundWithWeb`). DevTest plan+.
+   `POST /v1/search/vector` (KNN; optional `groundWithWeb`). Available to all users.
 4. **Engine discovery** — `GET /v1/engines` (+ `/:id`): list providers, modalities,
    access type, priority, key requirements, availability for the caller.
 5. **Keys** — user API keys (`sk-hds-…`, shown once, hashed) and encrypted upstream
    provider credentials, both managed in the panel and via API.
-6. **Accounts/usage** — profile, plan, monthly usage, search history, dashboard
-   metrics (from TimescaleDB).
-7. **Billing** — Stripe checkout + portal + webhook; plan drives quota + vector
-   entitlement.
-8. **MCP server** — `hd_search`, `hd_crawl`, `hd_vector_search`,
+6. **Accounts/usage** — profile, usage stats, search history, dashboard
+   metrics (from TimescaleDB). All features unlimited and free.
+7. **MCP server** — `hd_search`, `hd_crawl`, `hd_vector_search`,
    `hd_vector_index`, `hd_list_engines`.
-9. **Web UI** — see §3 Goals; faceted search like the WorldMonitor SEW pages.
+8. **Web UI** — see §3 Goals; faceted search like the WorldMonitor SEW pages.
 
-## 6. Plans & pricing
-
-| Plan | Price/mo | Quota (search+crawl+vector) | Vector |
-|---|---|---|---|
-| Free | $0 | 100 | ✗ |
-| Dev | $20 | 1,000 | ✗ |
-| DevTest | $200 | 15,000 | ✓ |
-| Production | $250 | 30,000 | ✓ |
-| Enterprise | Custom | Custom | ✓ |
-
-## 7. Non-functional requirements
+## 6. Non-functional requirements
 
 - **Resiliency:** any single dependency (Redis/Postgres/S3/provider) may be down
   and the service degrades rather than fails. Bounded retries + timeouts on every
@@ -94,25 +82,27 @@ caching, faceting, and a plugin system so new providers are a single file.
 - **Cost:** free/self-hosted providers first + caching minimize commercial spend.
 - **Extensibility:** new provider = one file + registry line + priority row.
 
-## 8. Success metrics
+## 7. Success metrics
 
 - p50 search latency (cached vs live), cache hit ratio, % requests served by free
-  vs commercial providers, provider error rate, monthly active API keys, free→paid
-  conversion, vector adoption (DevTest+).
+  vs commercial providers, provider error rate, monthly active API keys, vector
+  adoption.
 
-## 9. Risks & mitigations
+## 8. Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
 | Google/captcha blocks scrapers | Default to searxng + openserp→yandex/baidu; document proxy/2captcha. |
 | Upstream rate limits | Redis cache w/ per-source TTL; fallback ordering; aggregate dedup. |
-| Cost runaway | Quotas per plan; free providers first; caching. |
+| Cost runaway | Free/self-hosted providers first; aggressive caching; per-key rate limits. |
 | Secret leakage | AES-256-GCM at rest; sha256 API keys; least-privilege DB role. |
 | Slow providers stalling UX | Per-call timeout + retries; aggregate soft deadline. |
 
-## 10. Rollout
+## 9. Rollout
 
-1. Self-host backend + web against existing infra (done).
-2. Configure Auth0 + Stripe for production sign-in/billing.
+1. Self-host via `docker-compose.selfhost.yml` (bundles Postgres/Timescale, Redis,
+   SeaweedFS, local embeddings + providers on a private network; done).
+2. Create the first admin on first run (onboarding screen or
+   `HDSEARCH_ADMIN_EMAIL`/`HDSEARCH_ADMIN_PASSWORD`); enter provider API keys in the UI.
 3. Add residential proxy / 2captcha for Google via openserp (optional).
 4. Expand provider catalog (remaining sheet entries; onion-proxied darkweb).

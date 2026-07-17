@@ -1,7 +1,8 @@
 // Plan-B2 entitlement mapping: hd-search has NO plans of its own — it folds into the
 // central hackerdogs-core plans. This maps a core plan SKU to hd-search's internal PlanId,
 // so every existing quota/feature check (plans.ts, checkQuota) keeps working unchanged.
-// Gate on SKU (stable), never display name. See docs/AUTH_PLAN_INTEGRATION.md §4.2.
+// Gate on SKU (stable), never display name. (Legacy; unused in the open-source
+// build, where plans/quotas are disabled.) See docs/OPEN_SOURCE_MIGRATION.md.
 import type { PlanId } from './plans.js';
 
 // core SKU → hd-search tier (verified against the live core /gpdtplansui catalog)

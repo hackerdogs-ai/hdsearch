@@ -1,7 +1,7 @@
 # HD-Search — Technical Design Specification
 
 **Scope:** architecture, data model, provider plugin system, engine algorithms,
-caching, vector search, auth, billing, and the web BFF. Companion docs:
+caching, vector search, auth, and the web BFF. Companion docs:
 [PRD](PRD.md), [Configuration & Deployment](CONFIGURATION_DEPLOYMENT.md),
 [Performance/Scale/Security](PERFORMANCE_SCALE_SECURITY.md), [OpenSERP](OPENSERP.md),
 [Darkweb](DARKWEB_SEARCH.md).
@@ -32,13 +32,13 @@ SDK + zod. Web = Next.js 14 App Router + Tailwind. ESM, Node 20+.
 
 ## 2. Request lifecycle (search)
 
-1. **Auth** (`src/auth.ts`): API key (`sk-hds-…`) → principal{userId,scopes,plan}
+1. **Auth** (`src/auth.ts`): API key (`sk-hds-…`) → principal{userId,scopes,role}
    OR first-party header (`X-HD-Internal`+`X-HD-User`) from the web BFF. Per-key
    sliding-window rate limit (Redis).
 2. **Validate** (zod `SearchRequestSchema`).
-3. **Quota** (`src/plans.ts`): monthly counter vs plan; vector gated to DevTest+.
-   Anonymous home/search runs as a shared `public-demo` identity that is exempt from
-   the monthly quota (configurable via `HDSEARCH_DEMO_USERS`); real users get their plan quota.
+3. **No quota** (`src/plans.ts`): usage is unlimited and free — `checkQuota` is a
+   no-op. Vector and every other modality are available to all users. The per-key
+   rate limit (step 1) is the only throughput guard.
 4. **Resolve candidates** (`src/providers/index.ts`): providers for the modality,
    filtered by key availability, sorted by effective priority (CSV override or
    hardcoded default).
@@ -113,12 +113,11 @@ openserp(20) for latency. Overrides the hardcoded `defaultPriority` per provider
 
 | Table | Purpose | Notes |
 |---|---|---|
-| `users` | identity + plan + stripe customer | id = Auth0 sub |
+| `users` | identity + auth | id = local uuid; `email`, `password_hash` (scrypt), `role` (`admin`/`user`) |
 | `user_provider_keys` | encrypted upstream creds | `secret_enc` = AES-256-GCM; unique (user, field) |
 | `api_keys` | `sk-hds-` keys | sha256 hash only; scopes; rate limit |
 | `search_history` | per-call log | **hypertable** (ts) |
 | `usage_metrics` | time-series metrics | **hypertable** (ts) |
-| `usage_counters` | monthly quota counters | (user, period, kind) |
 
 **Roles:** `hdsearchadmin` (owner/DDL/migrations), `hdsearchrw` (app runtime, DML
 only, no DDL), `hdsearchreadonly` (SELECT). See [CREDENTIALS](../api/db/CREDENTIALS.md).
@@ -128,14 +127,17 @@ only, no DDL), `hdsearchreadonly` (SELECT). See [CREDENTIALS](../api/db/CREDENTI
 - **API:** bearer `sk-hds-…` (hashed, Redis-cached verify) or first-party
   `X-HD-Internal`+`X-HD-User`. Scopes: `search:read`, `crawl:read`, `vector:read`,
   `admin:keys`. Per-key rate limit.
-- **Web:** dependency-free OIDC BFF (`web/src/lib/auth.ts`) — Authorization Code
-  against Auth0; identity (email/name/picture) from the id_token; signed-cookie
-  session (HMAC-SHA256). Social connections (`github`, `google-oauth2`). Dev-login
-  fallback when Auth0 is unconfigured. Internal redirects are relative (port-safe).
-- **Secrets bootstrap** (`src/secrets.ts` / `web/src/lib/secrets.ts`): the encryption
-  key + internal BFF secret are read from env, else from a shared persisted file
-  (`.hdsearch-secrets.json`, or `HDSEARCH_SECRETS_FILE`), else generated once and
-  written there — so API and web agree and the app works zero-config. Env always wins.
+- **Web:** local email + password auth (`web/src/lib/auth.ts`) stored in the app's
+  own Postgres — no Auth0, SSO, or external IdP. Passwords hashed with **scrypt**;
+  roles (`admin`/`user`) come from the DB `role` column. On first run the app shows an
+  **admin onboarding screen** to create the initial admin (or provisions it headlessly
+  from `HDSEARCH_ADMIN_EMAIL` / `HDSEARCH_ADMIN_PASSWORD`). The session is an
+  **AES-256-GCM encrypted, httpOnly cookie**. Internal redirects are relative (port-safe).
+- **Secrets bootstrap** (`src/secrets.ts` / `web/src/lib/secrets.ts`): the app
+  **auto-generates** its crypto secrets (encryption key + internal BFF secret) into a
+  shared `hds-secrets` Docker volume on first boot — so API and web agree and the app
+  works zero-config with **no secrets in env**. The generated file is reused across
+  restarts (never regenerated) so encrypted data stays readable.
 
 ## 8a. Developer experience (web)
 
@@ -146,26 +148,20 @@ only, no DDL), `hdsearchreadonly` (SELECT). See [CREDENTIALS](../api/db/CREDENTI
 - **Search UX:** infinite-scroll results (BFF `/api/search?page=N` + IntersectionObserver),
   a `useTransition` top progress bar on modality/query navigation, faceted rail.
 
-## 9. Billing (`src/routes/billing.ts`)
-
-Stripe Checkout (subscription) → `customer.subscription.*` / `checkout.session.
-completed` webhooks update `users.plan` → drives quota + vector entitlement.
-Billing Portal for self-serve management. All optional (503 when unconfigured).
-
-## 10. Web BFF (`web/src/lib/api.ts`)
+## 9. Web BFF (`web/src/lib/api.ts`)
 
 The browser never holds an API key. Server components/route handlers call the API
-with `X-HD-Internal` (shared secret) + `X-HD-User` (Auth0 sub). All quota/rate
+with `X-HD-Internal` (shared secret) + `X-HD-User` (local user id). Rate
 limit/provider-key resolution happens server-side, identical to API-key callers.
 
-## 11. Error handling & observability
+## 10. Error handling & observability
 
 - `src/http.ts`: timeout (AbortController) + bounded retries w/ backoff + typed
   `ProviderError(provider,status,retryable)`.
 - `src/logger.ts`: structured JSON logs, request ids, never leak stacks to clients.
 - `/healthz`: per-dependency liveness (redis/postgres/seaweedfs/rediSearch/embeddings).
 
-## 12. Key directories
+## 11. Key directories
 
 ```
 api/src/{providers,routes}  engine.ts cache.ts vector.ts embeddings.ts

@@ -2,7 +2,8 @@
 // never holds tokens: the server runs the code flow (PKCE — no client secret needed, same
 // SPA client as worldmonitor), exchanges the Auth0 id_token at core /auth/token-exchange for
 // the Hackerdogs JWT, and keeps everything in an encrypted httpOnly cookie. Refresh uses the
-// Auth0 refresh token. See docs/AUTH_PLAN_INTEGRATION.md.
+// Auth0 refresh token. (Legacy; the open-source self-host build uses local
+// email+password auth — see web/src/app/api/auth/local.) See docs/OPEN_SOURCE_MIGRATION.md.
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { config } from './config';

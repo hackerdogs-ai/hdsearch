@@ -74,8 +74,8 @@ The API holds no per-instance state (cache/rate-limit/keys/sessions live in Redi
 - Free/self-hosted first + caching keeps commercial spend low.
 - openserp is a headless browser — scale it horizontally (multiple replicas) and/or
   put it behind proxies if you rely on it heavily.
-- Per-plan **quotas** (monthly counters) cap per-tenant load and cost; rate limits
-  cap burst.
+- Usage is unlimited (no quotas); per-key sliding-window **rate limits** cap burst
+  and protect upstreams.
 
 ## B.4 Concurrency controls
 
@@ -97,14 +97,15 @@ The API holds no per-instance state (cache/rate-limit/keys/sessions live in Redi
 ## C.1 Secrets at rest
 
 - **Provider credentials:** AES-256-GCM (`src/crypto.ts`), wire format
-  `v1:iv:tag:ciphertext`. Master key from `HDSEARCH_ENCRYPTION_KEY` (32-byte
-  hex/base64). Plaintext never touches Postgres (verified: stored as `v1:…`).
-- **Secret provisioning:** if the encryption key / internal BFF secret aren't set via
-  env, they are generated once and persisted to `.hdsearch-secrets.json`
-  (mode `0600`, gitignored, `HDSEARCH_SECRETS_FILE` to relocate) so local runs work
-  zero-config. **In production set them explicitly and back up the file** — losing the
-  encryption key makes stored provider keys unrecoverable. The file is reused across
-  restarts (never regenerated), so encrypted data stays readable.
+  `v1:iv:tag:ciphertext`. Provider API keys (OpenAI, Brave, SerpAPI, …) are entered in
+  the **UI** (Account → Provider Keys, or Dashboard → System Admin for system-wide),
+  stored encrypted in the DB — **never in env**. Plaintext never touches Postgres
+  (verified: stored as `v1:…`).
+- **Secret provisioning:** the app **auto-generates** its crypto secrets (encryption
+  key + internal BFF secret) into a shared **`hds-secrets` Docker volume** on first
+  boot — **no secrets in env**, zero-config. The generated file is reused across
+  restarts (never regenerated), so encrypted data stays readable; **back up the
+  volume** — losing the encryption key makes stored provider keys unrecoverable.
 - **API keys:** only the **sha256** hash is stored; the `sk-hds-…` secret is shown
   once at creation. Per-key scopes + rate limit; revocation invalidates the cache.
 
@@ -119,9 +120,11 @@ The API holds no per-instance state (cache/rate-limit/keys/sessions live in Redi
 
 - API: bearer `sk-hds-…` (hashed, short-TTL verify cache) or first-party
   `X-HD-Internal`+`X-HD-User` from the web BFF only. Scope checks per route.
-- Web: OIDC Authorization Code with Auth0 (confidential client; token exchange
-  server-side over TLS). Signed-cookie session (HMAC-SHA256, httpOnly, SameSite=Lax,
-  Secure when `APP_BASE_URL` is https). The browser never holds an API key.
+- Web: **local email + password** stored in the app's own DB (no Auth0/SSO).
+  Passwords hashed with **scrypt**; roles (`admin`/`user`) from the DB `role` column.
+  Session is an **AES-256-GCM encrypted, httpOnly cookie** (SameSite=Lax, Secure when
+  `APP_BASE_URL` is https). First-run admin onboarding (or headless via
+  `HDSEARCH_ADMIN_EMAIL`/`HDSEARCH_ADMIN_PASSWORD`). The browser never holds an API key.
 
 ## C.4 Input & output safety
 
@@ -152,16 +155,18 @@ The API holds no per-instance state (cache/rate-limit/keys/sessions live in Redi
 
 ## C.8 Production hardening checklist
 
-- [ ] `RUN_MODE=prod` (no shared `.env` provider keys).
-- [ ] Rotate dev-default DB passwords + all secrets; set a strong
-      `HDSEARCH_ENCRYPTION_KEY` and back it up (losing it makes stored keys
+- [ ] `RUN_MODE=prod` (provider keys entered in the UI, stored encrypted in the DB).
+- [ ] Rotate dev-default DB passwords; **back up the `hds-secrets` volume**
+      (losing the auto-generated encryption key makes stored provider keys
       unrecoverable).
+- [ ] Set a strong first admin password (onboarding screen or
+      `HDSEARCH_ADMIN_EMAIL`/`HDSEARCH_ADMIN_PASSWORD`).
 - [ ] TLS everywhere; `APP_BASE_URL` https so session cookies are `Secure`.
 - [ ] Restrict `HDSEARCH_CORS_ORIGINS` to your domains.
-- [ ] Stripe webhook signature verification on (`STRIPE_WEBHOOK_SECRET`).
-- [ ] Network-isolate Redis/Postgres/S3 to `hdnet`; don't publish them publicly.
+- [ ] Network-isolate Redis/Postgres/S3 to the private Docker network; don't publish
+      them publicly (only web :3000 and API :8791 are exposed).
 - [ ] Set Timescale retention + S3 lifecycle policies.
-- [ ] Monitor `/healthz`, provider error rates, cache hit ratio, quota usage.
+- [ ] Monitor `/healthz`, provider error rates, cache hit ratio.
 
 ---
 
@@ -175,7 +180,7 @@ service still answers what it can.
 | Dependency down | Behavior |
 |---|---|
 | **hdsearch-redis** | `redisHealthy()` trips → cache + rate-limit skipped (fail-open); search still runs live against providers; vectors return 503. Auto-recovers on the next successful command. |
-| **Postgres (hd-db)** | history/metrics writes are best-effort (`tryQuery` → no-op); quota falls back to allow; API-key verify uses the Redis hot-cache; search/crawl unaffected. |
+| **Postgres (hd-db)** | history/metrics writes are best-effort (`tryQuery` → no-op); API-key verify uses the Redis hot-cache; search/crawl unaffected. |
 | **SeaweedFS (S3)** | only crawl *archival* (`store:true`) is skipped; crawl results still returned. |
 | **A search/crawl provider** | bounded timeout + retries, then the engine falls through to the next provider (fallback) or drops it from the merge (aggregate soft deadline). |
 | **Embedder** | vector endpoints return a clear 503; everything else works. |

@@ -11,11 +11,11 @@
 
 ### A.1 Summary
 
-AI Search conversations should persist using the **same tiered model as search history**: browser → Redis (3-day) → S3 archive (paid) → Postgres/Timescale (analytics). Signed-in users sync across devices via server tiers; everyone gets a local browser copy.
+AI Search conversations should persist using the **same tiered model as search history**: browser → Redis (3-day) → S3 archive (durable) → Postgres/Timescale (analytics). Signed-in users sync across devices via server tiers; everyone gets a local browser copy.
 
-In addition, users get a **Temporary chat** mode (ChatGPT-style): even when signed in (including paid plans), they can start a conversation that is **never written to Redis, S3, or Postgres** — only held in the browser for that session.
+In addition, users get a **Temporary chat** mode (ChatGPT-style): even when signed in, they can start a conversation that is **never written to Redis, S3, or Postgres** — only held in the browser for that session.
 
-This document **supersedes** earlier ideas of Redis-only AI persistence with user-selectable TTL (24h / 3d / 7d). AI chat TTL on the server matches search history: **3 days in Redis**, with paid **durable S3 archive** and **Timescale analytics**.
+This document **supersedes** earlier ideas of Redis-only AI persistence with user-selectable TTL (24h / 3d / 7d). AI chat TTL on the server matches search history: **3 days in Redis**, with a **durable S3 archive** and **Timescale analytics**.
 
 ### A.2 Problem
 
@@ -23,7 +23,7 @@ Today:
 
 - AI threads live in **browser localStorage only** (`useLocalRuntime` + assistant-ui).
 - Server-side `recordHistory()` stores only the **last user prompt** (not the full thread) in the same Redis list as search recents.
-- There is no cross-device AI chat restore, no paid durable archive for conversations, and no analytics table for AI threads comparable to `search_history`.
+- There is no cross-device AI chat restore, no durable archive for conversations, and no analytics table for AI threads comparable to `search_history`.
 
 Users expect parity with search history (account sync + dashboard) and an explicit **private / temporary** chat when they do not want server retention.
 
@@ -31,18 +31,18 @@ Users expect parity with search history (account sync + dashboard) and an explic
 
 | # | Goal |
 |---|------|
-| G1 | **Tier parity with search** — same four-layer strategy: browser, Redis (3d), S3 (paid), Postgres (analytics). |
+| G1 | **Tier parity with search** — same four-layer strategy: browser, Redis (3d), S3 (durable), Postgres (analytics). |
 | G2 | **Full thread restore** — not just the last prompt; messages, titles, and tool-ui payloads needed to reopen a chat. |
-| G3 | **Temporary chat** — opt-in per thread; skips all server persistence; available to signed-in and paid users. |
+| G3 | **Temporary chat** — opt-in per thread; skips all server persistence; available to every signed-in user. |
 | G4 | **Anonymous users** — browser tier only; temporary by default; no server write. |
-| G5 | **Credits unchanged** — temporary chats still meter credits; persistence mode does not bypass billing. |
+| G5 | **Unlimited & free** — persistence mode has no billing implication; usage is unlimited (usage recorded for telemetry only). |
 | G6 | **Best-effort writes** — persistence failures never block streaming or chat completion (same as `recordHistory` / `recordUsage`). |
 
 ### A.4 Non-goals (this phase)
 
 - User-configurable retention (24h / 7d dropdown) — **out of scope**; fixed 3-day Redis to match search.
 - Postgres as primary thread store for UI restore — **later**; v1 uses Redis + S3 like search recents, Timescale for audit only.
-- Encrypting thread content differently from search history — reuse existing trust boundary (Auth0 / core JWT, per-user keys).
+- Encrypting thread content differently from search history — reuse existing trust boundary (local email+password session, per-user keys).
 - Syncing temporary chats to account after the fact.
 
 ### A.5 Personas
@@ -50,14 +50,14 @@ Users expect parity with search history (account sync + dashboard) and an explic
 | Persona | Need |
 |---------|------|
 | **Signed-in researcher** | Chats follow them across browsers; sidebar lists recent threads. |
-| **Paid user** | Durable archive beyond 3-day Redis window (compliance / revisit). |
+| **Long-term user** | Durable archive beyond 3-day Redis window (compliance / revisit). |
 | **Privacy-conscious user** | Temporary chat: no server copy, like ChatGPT temporary thread. |
 | **Anonymous visitor** | Try AI Search locally; sign in to unlock account sync. |
 
 ### A.6 User-facing requirements
 
 1. **Default (signed in, not temporary)**  
-   - New AI chats persist to **browser + Redis (+ S3 if paid + Postgres metrics)**.  
+   - New AI chats persist to **browser + Redis + S3 (durable archive) + Postgres metrics**.  
    - Sidebar shows server-backed thread list when signed in.  
    - Dashboard can link to recent AI conversations (alongside existing query recents).
 
@@ -67,8 +67,7 @@ Users expect parity with search history (account sync + dashboard) and an explic
      - No Redis / S3 / Postgres thread writes.  
      - Browser may still hold messages **only until tab close / explicit new chat** (see Spec §C.4).  
      - Visual indicator (badge) so user knows the chat is not saved to account.  
-   - Applies to **all** signed-in users including paid.  
-   - Credits still deducted per turn.
+   - Applies to **all** signed-in users.
 
 3. **Not signed in**  
    - Temporary behavior only (no server tiers).  
@@ -86,7 +85,7 @@ Users expect parity with search history (account sync + dashboard) and an explic
 
 - Signed-in user opens AI on device B and sees threads created on device A (within 3-day window).
 - Temporary thread never appears in `GET /v1/ai/threads` or Redis keys for that user.
-- Paid user: thread snapshot exists under `ai-threads/<userId>/` in S3 after each completed turn.
+- Signed-in user: thread snapshot exists under `ai-threads/<userId>/` in S3 after each completed turn.
 - Zero increase in chat SSE error rate due to persistence (writes async / best-effort).
 
 ---
@@ -99,7 +98,7 @@ Use this as the **template** for AI chat persistence.
 |------|-------|-----|-------------|----------------|------|
 | **Browser** | `localStorage` (`hd_recents`) | Everyone | 50 entries | `{ q, modality, ts }` | `web/src/lib/recents.ts` |
 | **Redis** | `hds:history:<userId>` list | Signed-in (not demo) | **3 days**, max **200** | `{ q, modality, ts, count?, source?, model? }` | `api/src/history.ts` |
-| **S3** | `history/<userId>/<ts>_<hash>.json` | Paid plans (`dev`, `devtest`, `production`, `enterprise`) | Durable | Same entry JSON as Redis | `api/src/storage.ts` → `archiveHistory` |
+| **S3** | `history/<userId>/<ts>_<hash>.json` | All signed-in (non-demo) users | Durable | Same entry JSON as Redis | `api/src/storage.ts` → `archiveHistory` |
 | **Postgres** | `hd_search.search_history` hypertable | All API calls (incl. demo) | Operational retention | Full call log: engines, timing, counts | `api/src/metrics.ts` → `recordUsage` |
 
 **Recording triggers:** search → `recordHistory` + `recordUsage`; AI today → `recordHistory` (prompt only) only.
@@ -125,16 +124,16 @@ AI chat persistence **mirrors this stack** with AI-specific payloads and keys (�
                     │    (default for signed-in users)     │
                     └─────────────────┬─────────────────┘
                                       │
-        ┌───────────────┬─────────────┼─────────────┬───────────────┐
-        ▼               ▼             ▼             ▼               ▼
-    Browser         Redis (3d)    S3 (paid)    Postgres         Credits
-    (always)        signed-in     archive      analytics        (always)
+        ┌───────────────┬─────────────┼─────────────────────────────┐
+        ▼               ▼             ▼                             ▼
+    Browser         Redis (3d)    S3 (durable)               Postgres
+    (always)        signed-in     archive                    analytics
 ```
 
 | Mode | Browser | Redis | S3 | Postgres thread row | Query recents (`recordHistory`) |
 |------|---------|-------|----|--------------------|------------------------------|
 | Anonymous | Yes | No | No | No | No |
-| Signed-in, normal | Yes | Yes | If paid | Yes (metrics) | Yes (last prompt) |
+| Signed-in, normal | Yes | Yes | Yes | Yes (metrics) | Yes (last prompt) |
 | Signed-in, **temporary** | Yes* | No | No | No | No |
 
 \* Temporary browser retention: in-memory or sessionStorage preferred over long-lived localStorage so refresh can drop the thread (product choice: **sessionStorage** for temporary threads; **localStorage** for normal browser tier). Document default: **sessionStorage** for temporary, **localStorage** for normal — aligns with “not saved to account.”
@@ -179,7 +178,6 @@ interface AiMessageRecord {
   role: 'user' | 'assistant';
   content: AiContentPart[];  // text + tool-ui blocks (assistant-ui compatible subset)
   createdAt: number;
-  credits?: number;
   model?: string;
 }
 ```
@@ -188,12 +186,12 @@ Refresh **both** index entry and blob TTL on each completed turn (3-day rolling 
 
 **Size limits:** cap blob at **512 KB** or **100 messages** (whichever first); truncate oldest assistant tool payloads with summary note in UI.
 
-#### C.2.3 S3 archive (paid — mirrors `archiveHistory`)
+#### C.2.3 S3 archive (durable — mirrors `archiveHistory`)
 
 Path: `ai-threads/<userId>/<threadId>/<updatedAt>_<sha1>.json`  
 Body: full `AiThreadBlob` snapshot after each completed turn (immutable revision per save).
 
-Reuse `PAID_PLANS` set from `history.ts`.
+Written for all signed-in (non-demo) users, same gate as `archiveHistory` in `history.ts`.
 
 #### C.2.4 Postgres analytics (mirrors `search_history`)
 
@@ -208,7 +206,6 @@ New hypertable **`hd_search.ai_thread_runs`** (or extend `search_history` with `
 | model | text | |
 | input_tokens | int | |
 | output_tokens | int | |
-| credits | int | |
 | took_ms | int | |
 | status | text | ok / error / cancelled |
 
@@ -242,7 +239,6 @@ Continue writing `{ q, modality: 'ai', source: 'ai', model, ts }` for **non-temp
 | **Sidebar** | Temporary threads show only while active; ghost icon; not in server thread list. |
 | **Switch normal → temporary mid-thread** | Do not delete already-synced server copy; stop further server writes; optional banner. |
 | **Switch temporary → normal mid-thread** | Optional v1: offer “Save to account” one-shot upload; else only new threads persist. |
-| **Credits** | Always charged when signed in (unchanged). |
 
 ### C.5 API surface
 
@@ -298,7 +294,7 @@ Same philosophy as `history.ts` / `metrics.ts`.
 | Phase | Scope |
 |-------|--------|
 | **P1** | `ai-threads.ts` Redis read/write; API routes; BFF; hybrid runtime; temporary toggle UI; skip server writes when temporary. |
-| **P2** | S3 archive for paid plans; dashboard AI conversation links; clear-all account action. |
+| **P2** | S3 durable archive; dashboard AI conversation links; clear-all account action. |
 | **P3** | Postgres `ai_thread_runs` hypertable + dashboard metrics charts. |
 | **P4** (future) | Postgres primary store for long retention / cross-region; Redis as hot cache only. |
 
@@ -315,11 +311,10 @@ Same philosophy as `history.ts` / `metrics.ts`.
 
 - [ ] Signed-in user creates non-temporary thread on device A; device B lists and opens it within 3 days.  
 - [ ] After 3 days without activity, Redis thread keys expire (same as search history).  
-- [ ] Paid user: S3 object written under `ai-threads/<userId>/…` on each completed turn.  
+- [ ] Signed-in user: S3 object written under `ai-threads/<userId>/…` on each completed turn.  
 - [ ] Temporary thread: no keys under `hds:ai:threads:<userId>` or `hds:ai:thread:…` after chat completes.  
 - [ ] Temporary thread: no `recordHistory` entry for that conversation.  
 - [ ] Anonymous user: no server AI thread APIs return data; toggle disabled.  
-- [ ] Credits deducted for temporary and normal chats when signed in.  
 - [ ] Persistence errors do not fail `/v1/ai/chat` SSE stream.  
 - [ ] Clear account AI threads removes Redis index + blobs (and documents S3 lifecycle separately).
 
