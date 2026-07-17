@@ -40,20 +40,27 @@ Because I was tired of paying subscriptions and credits to all these search prov
 
 You need **Docker** (with Compose). Nothing else.
 
-### Option A — run the published images (recommended)
+Pick a **deployment topology** — all on the `hdsearchnet` network:
 
+**Full — everything in one command (recommended to start):**
 ```bash
 git clone https://github.com/hackerdogs-ai/hdsearch.git && cd hdsearch
-docker compose -f docker-compose.hub.yml up -d          # pulls hackerdogs/hdsearch:api + :web
-open http://localhost:3000                              # first run → create your admin account
+docker compose -f docker-compose-full.yml up -d     # pulls the images + bundled infra
+open http://localhost:3000                          # first run → create your admin account
 ```
 
-### Option B — build from source
-
+**Split — run infra and core separately (scale them independently):**
 ```bash
-git clone https://github.com/hackerdogs-ai/hdsearch.git && cd hdsearch
-docker compose -f docker-compose.selfhost.yml up -d --build
-open http://localhost:3000
+docker compose -f docker-compose-infra.yml up -d    # datastores + providers
+docker compose -f docker-compose-core.yml up -d     # api + web
+```
+
+**Core only — point HD-Search at services you already run** (Postgres, Redis, S3, …):
+```bash
+HDSEARCH_DATABASE_URL=postgres://user:pw@your-db:5432/hdsearch \
+HDSEARCH_REDIS_URL=redis://your-redis:6379/5 \
+HDSEARCH_S3_ENDPOINT=http://your-s3:8333 \
+  docker compose -f docker-compose-core.yml up -d
 ```
 
 That's the whole setup. **There are no secrets to configure** — the app
@@ -61,16 +68,15 @@ auto-generates its crypto secrets on first boot. On first visit you create the
 **admin account** in the browser (or set `HDSEARCH_ADMIN_EMAIL` /
 `HDSEARCH_ADMIN_PASSWORD` for a headless bootstrap).
 
-**Add search/LLM provider keys later, in the UI** — *Account → Provider Keys* (per-user) or *System Admin* (system-wide). The free/self-hosted engines and local Ollama work out of the box with no keys.
-
-> Only the web (`:3000`) and API (`:8791`) ports are published; the bundled
-> datastores stay on a private network.
+- **Add search/LLM provider keys later, in the UI** — *Account → Provider Keys* (per-user) or *System Admin* (system-wide). The free/self-hosted engines and local Ollama work with no keys.
+- The API also serves the **MCP server (Streamable HTTP) on `:8792`**, in the same container — no separate process to run.
+- **Build from source** instead of pulling images: `./publish_to_docker.sh --build-only --native <ns>` then run any compose above (they use `<ns>/hdsearch:*`).
 
 ### Try it
 
 ```bash
 # issue an API key: Account → API Keys in the UI, or:
-docker compose -f docker-compose.hub.yml exec hds-api node dist/scripts/hds-keys.js issue --user me --name laptop
+docker compose -f docker-compose-full.yml exec hds-api node dist/scripts/hds-keys.js issue --user me --name laptop
 
 KEY=sk-hds-...
 curl http://localhost:8791/v1/search -H "authorization: Bearer $KEY" \
@@ -210,7 +216,7 @@ Build & push multi-arch images to your own Docker Hub namespace:
 ./publish_to_docker.sh --build-only <namespace>
 ```
 
-Then run them anywhere: `HDSEARCH_IMAGE_NS=<namespace> docker compose -f docker-compose.hub.yml up -d`.
+Then run them anywhere: `HDSEARCH_IMAGE_NS=<namespace> docker compose -f docker-compose-full.yml up -d`.
 
 ## 🛠️ Development
 

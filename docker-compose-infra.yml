@@ -1,0 +1,146 @@
+# HD-Search — INFRA ONLY (datastores + search/crawl providers).
+#
+# Everything HD-Search's core depends on, on the `hdsearchnet` network with fixed
+# container names + known ports. Run this together with docker-compose-core.yml
+# (core connects by these container names), or use docker-compose-full.yml for both.
+#
+#   docker compose -f docker-compose-infra.yml up -d
+#
+# Container name : port (on hdsearchnet) that core points at by default:
+#   hds-db          5432   Postgres/TimescaleDB
+#   hds-redis       6379   Redis Stack (RediSearch)
+#   hds-seaweedfs   8333   SeaweedFS S3
+#   hds-embeddings  8080   MiniLM embeddings
+#   hds-openserp    7000   OpenSERP
+#   hds-searxng     8080   SearXNG
+#   hds-crawl4ai    11235  Crawl4AI
+#   hds-browserless 3000   Browserless
+#   hds-tor         9050   Tor SOCKS
+
+services:
+  hds-db:
+    image: timescale/timescaledb:latest-pg17
+    container_name: hds-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hdsearch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hdsearch}
+      POSTGRES_DB: ${POSTGRES_DB:-hdsearch}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      PGDATA: /var/lib/postgresql/data/pg_data
+    command: ["postgres", "-c", "max_connections=200"]
+    volumes:
+      - hds-postgres-data:/var/lib/postgresql/data
+    networks: [hdsearchnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hdsearch} -d ${POSTGRES_DB:-hdsearch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  hds-redis:
+    image: redis/redis-stack-server:latest
+    container_name: hds-redis
+    restart: unless-stopped
+    environment:
+      - REDIS_ARGS=--appendonly yes
+    volumes:
+      - hds-redis-data:/data
+    networks: [hdsearchnet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hds-seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: hds-seaweedfs
+    restart: unless-stopped
+    command: ["server", "-s3"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${STORAGE_AWS_ACCESS_KEY_ID:-hdsearch}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_AWS_SECRET_ACCESS_KEY:-hdsearch-secret}
+    volumes:
+      - hds-seaweedfs-data:/data
+    networks: [hdsearchnet]
+
+  hds-embeddings:
+    image: semitechnologies/transformers-inference:sentence-transformers-multi-qa-MiniLM-L6-cos-v1
+    container_name: hds-embeddings
+    restart: unless-stopped
+    environment:
+      ENABLE_CUDA: ${WEAVIATE_ENABLE_CUDA:-0}
+    networks: [hdsearchnet]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/.well-known/ready')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  hds-openserp:
+    image: karust/openserp:latest
+    container_name: hds-openserp
+    restart: unless-stopped
+    platform: linux/amd64
+    command: ["serve", "-a", "0.0.0.0", "-p", "7000",
+              "--allow_endpoint_fallback", "--timeout", "20",
+              "--max_retries", "2", "--cache_ttl", "600", "--cache_max_size", "2000",
+              "--cb_failures", "3", "--cb_recovery", "120", "-l"]
+    networks: [hdsearchnet]
+
+  hds-searxng:
+    image: searxng/searxng:latest
+    container_name: hds-searxng
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_SEARCH_FORMATS=html,json
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks: [hdsearchnet]
+
+  hds-crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: hds-crawl4ai
+    restart: unless-stopped
+    environment:
+      - CRAWL4AI_LOG_LEVEL=${CRAWL4AI_LOG_LEVEL:-INFO}
+    networks: [hdsearchnet]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  hds-browserless:
+    image: browserless/chrome:latest
+    container_name: hds-browserless
+    restart: unless-stopped
+    environment:
+      - CONNECTION_TIMEOUT=60000
+      - MAX_CONCURRENT_SESSIONS=10
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+    shm_size: 2gb
+    networks: [hdsearchnet]
+
+  hds-tor:
+    image: dperson/torproxy:latest
+    container_name: hds-tor
+    restart: unless-stopped
+    environment:
+      - TOR_NewCircuitPeriod=600
+      - TOR_MaxCircuitDirtiness=600
+    networks: [hdsearchnet]
+
+volumes:
+  hds-postgres-data:
+  hds-redis-data:
+  hds-seaweedfs-data:
+
+networks:
+  hdsearchnet:
+    name: hdsearchnet

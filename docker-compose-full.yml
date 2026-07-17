@@ -1,0 +1,17 @@
+# HD-Search — FULL stack (everything) in one command.
+#
+#   docker compose -f docker-compose-full.yml up -d
+#   open http://localhost:3000     # first run → setup wizard, then create admin
+#
+# This is core + infra together, on the `hdsearchnet` network. The API applies the
+# DB schema and starts the MCP server (Streamable HTTP :8792) in-container, and it
+# waits for the datastores on cold start — so no separate migrate/mcp containers
+# and no ordering flags needed. Secrets auto-generate into the shared volume.
+#
+# Deployment options:
+#   • docker-compose-full.yml   — everything (this file)
+#   • docker-compose-infra.yml  — only the datastores + providers
+#   • docker-compose-core.yml   — only api + web (point at your own services)
+include:
+  - docker-compose-infra.yml
+  - docker-compose-core.yml

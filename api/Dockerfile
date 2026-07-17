@@ -26,7 +26,7 @@ RUN useradd -r -u 10001 hdsearch \
   && mkdir -p /secrets && chown hdsearch:hdsearch /secrets \
   && chown -R hdsearch /app
 USER hdsearch
-EXPOSE 8791
+EXPOSE 8791 8792
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.HDSEARCH_API_PORT||8791)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/src/index.js"]

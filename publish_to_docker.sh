@@ -121,7 +121,7 @@ echo ""; ok "Done."
 if [ "$PUSH" = 1 ]; then
   echo ""
   echo "Run the published stack (no build needed):"
-  echo "  ${CYN}HDSEARCH_IMAGE_NS=$NS docker compose -f docker-compose.hub.yml up -d${NC}"
+  echo "  ${CYN}HDSEARCH_IMAGE_NS=$NS docker compose -f docker-compose-full.yml up -d${NC}"
   echo "  open http://localhost:3000"
   echo ""
   echo "Or pull directly:"

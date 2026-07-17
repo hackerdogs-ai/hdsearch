@@ -1,0 +1,89 @@
+# HD-Search — CORE ONLY (api + web). No datastores/providers.
+#
+# Use this when you already run Postgres, Redis (with RediSearch), an S3 store,
+# embeddings, and/or search providers — point HD-Search at them. Defaults target
+# the `hdsearchnet` container names (so this "just works" alongside
+# docker-compose-infra.yml); override any endpoint for your own services below or
+# in the first-run setup wizard (they're saved and editable in the UI later).
+#
+#   # A) alongside the bundled infra:
+#   docker compose -f docker-compose-infra.yml up -d
+#   docker compose -f docker-compose-core.yml up -d
+#   # B) against your OWN services — set the endpoints (env or the setup wizard):
+#   HDSEARCH_DATABASE_URL=postgres://user:pw@your-db:5432/hdsearch \
+#   HDSEARCH_REDIS_URL=redis://your-redis:6379/5 \
+#     docker compose -f docker-compose-core.yml up -d
+#
+# The API applies the DB schema on boot and runs the MCP server (Streamable HTTP)
+# in-container on :8792 — no separate migrate/mcp containers. Secrets are
+# auto-generated into the shared hds-secrets volume.
+
+services:
+  hds-api:
+    image: ${HDSEARCH_IMAGE_NS:-hackerdogs}/hdsearch:api${HDSEARCH_IMAGE_TAG:+-${HDSEARCH_IMAGE_TAG}}
+    container_name: hds-api
+    restart: unless-stopped
+    environment:
+      # --- external services (default to hdsearchnet container names; override for your own) ---
+      - HDSEARCH_DATABASE_URL=${HDSEARCH_DATABASE_URL:-postgres://${POSTGRES_USER:-hdsearch}:${POSTGRES_PASSWORD:-hdsearch}@${HDSEARCH_DB_HOST:-hds-db}:${HDSEARCH_DB_PORT:-5432}/${POSTGRES_DB:-hdsearch}}
+      - HDSEARCH_REDIS_URL=${HDSEARCH_REDIS_URL:-redis://${HDSEARCH_REDIS_HOST:-hds-redis}:${HDSEARCH_REDIS_PORT:-6379}/5}
+      - HDSEARCH_S3_ENDPOINT=${HDSEARCH_S3_ENDPOINT:-http://${HDSEARCH_S3_HOST:-hds-seaweedfs}:${HDSEARCH_S3_PORT:-8333}}
+      - STORAGE_AWS_ACCESS_KEY_ID=${STORAGE_AWS_ACCESS_KEY_ID:-hdsearch}
+      - STORAGE_AWS_SECRET_ACCESS_KEY=${STORAGE_AWS_SECRET_ACCESS_KEY:-hdsearch-secret}
+      - STORAGE_AWS_REGION=us-east-1
+      - HDSEARCH_BUCKET=hd-search
+      - HDSEARCH_EMBEDDINGS_PROVIDER=${HDSEARCH_EMBEDDINGS_PROVIDER:-minilm}
+      - HDSEARCH_EMBEDDINGS_URL=${HDSEARCH_EMBEDDINGS_URL:-http://${HDSEARCH_EMBEDDINGS_HOST:-hds-embeddings}:8080}
+      - HDSEARCH_VECTOR_DIM=${HDSEARCH_VECTOR_DIM:-384}
+      - HDSEARCH_OLLAMA_URL=${HDSEARCH_OLLAMA_URL:-http://host.docker.internal:11434}
+      # --- providers (default to hdsearchnet container names) ---
+      - HDSEARCH_OPENSERP_URL=${HDSEARCH_OPENSERP_URL:-http://hds-openserp:7000}
+      - HDSEARCH_OPENSERP_ENGINES=${HDSEARCH_OPENSERP_ENGINES:-google,yandex,bing,baidu}
+      - HDSEARCH_SEARXNG_URL=${HDSEARCH_SEARXNG_URL:-http://hds-searxng:8080}
+      - HDSEARCH_CRAWL4AI_URL=${HDSEARCH_CRAWL4AI_URL:-http://hds-crawl4ai:11235}
+      - HDSEARCH_BROWSERLESS_URL=${HDSEARCH_BROWSERLESS_URL:-http://hds-browserless:3000}
+      - HDSEARCH_TOR_PROXY=${HDSEARCH_TOR_PROXY:-socks5h://hds-tor:9050}
+      - HDSEARCH_GEOCODER_ENGINE=photon
+      - HDSEARCH_GEOCODER_URL=${HDSEARCH_GEOCODER_URL:-}
+      # --- secrets auto-generated into the shared volume; MCP in-container ---
+      - HDSEARCH_SECRETS_FILE=/secrets/hdsearch-secrets.json
+      - HDSEARCH_API_PORT=8791
+      - MCP_PORT=8792
+      - HDSEARCH_AUTH_MODE=legacy
+      - HDSEARCH_ADMIN_EMAIL=${HDSEARCH_ADMIN_EMAIL:-}
+      - HDSEARCH_ADMIN_PASSWORD=${HDSEARCH_ADMIN_PASSWORD:-}
+      - HDSEARCH_OPEN_SIGNUP=${HDSEARCH_OPEN_SIGNUP:-false}
+    ports:
+      - "${API_PORT:-8791}:8791"   # REST API
+      - "${MCP_PORT:-8792}:8792"   # MCP (Streamable HTTP)
+    volumes:
+      - hds-secrets:/secrets
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [hdsearchnet]
+
+  hds-web:
+    image: ${HDSEARCH_IMAGE_NS:-hackerdogs}/hdsearch:web${HDSEARCH_IMAGE_TAG:+-${HDSEARCH_IMAGE_TAG}}
+    container_name: hds-web
+    restart: unless-stopped
+    environment:
+      - HDSEARCH_API_URL=http://hds-api:8791
+      - NEXT_PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:8791}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
+      - HDSEARCH_SECRETS_FILE=/secrets/hdsearch-secrets.json
+      - HOSTNAME=0.0.0.0
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - hds-secrets:/secrets
+    depends_on:
+      hds-api:
+        condition: service_healthy
+    networks: [hdsearchnet]
+
+volumes:
+  hds-secrets:
+
+networks:
+  hdsearchnet:
+    name: hdsearchnet
