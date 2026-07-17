@@ -1,39 +1,25 @@
-# HD-Search — SELF-HOSTED, fully standalone stack (open-source mode).
+# HD-Search — run the PUBLISHED images from Docker Hub (no source build).
 #
-# Unlike docker-compose.yml (which reuses shared `hdnet` infra provisioned by the
-# parent monorepo's start_core_infra.sh), this file BUNDLES every backend the app
-# uses so an outside user can run the whole thing with nothing pre-installed:
+# Identical stack to docker-compose.selfhost.yml, except the api/web images are
+# PULLED from Docker Hub instead of built locally. Everything else — Postgres,
+# Redis Stack (RediSearch), SeaweedFS, embeddings, and the search/crawl providers
+# — is bundled on a private `hdsnet` network with `hds-*` names.
 #
-#   • hds-db          TimescaleDB/Postgres  (users, encrypted provider keys, history, metrics)
-#   • hds-redis       Redis Stack + RediSearch (cache, rate-limit, vector HNSW index)
-#   • hds-seaweedfs   SeaweedFS S3          (raw crawl payloads, file-upload originals)
-#   • hds-embeddings  transformers-inference MiniLM-L6 (384-dim vectors for vector search / RAG)
-#   • hds-openserp    self-hosted multi-engine SERP scraper
-#   • hds-searxng     self-hosted meta-search over 50+ engines
-#   • hds-crawl4ai    self-hosted LLM crawler
-#   • hds-browserless headless Chrome for JS-rendered crawls
-#   • hds-tor         Tor SOCKS proxy for .onion darkweb providers
-#   • hds-api / hds-web   the aggregator API + Next.js UI
+# QUICKSTART (nothing to build):
+#   # get this file + the ./searxng config dir (clone the repo, or download both):
+#   HDSEARCH_IMAGE_NS=hackerdogs docker compose -f docker-compose.hub.yml up -d
+#   open http://localhost:3000     # first run → create your admin account
 #
-# Everything runs on its OWN `hdsnet` network with `hds-*` names, so it will NOT
-# collide with the shared hd-redis / hd-db / hd-seaweedfs you may already run.
-# The datastores are internal-only (no published host ports) for the same reason.
+# There are NO secrets to configure — the app auto-generates its crypto secrets
+# into the shared `hds-secrets` volume. Add provider API keys (OpenAI, Brave, …)
+# in the UI (Account → Provider Keys). AI Search uses a host-run Ollama for free.
 #
-# QUICKSTART (nothing else installed required):
-#   docker compose -f docker-compose.selfhost.yml up -d --build
-#   open http://localhost:3000   (first run → create your admin account)
-#
-# No secrets to configure — the app auto-generates its crypto secrets into the
-# shared `hds-secrets` volume. Copy .env.selfhost.example only to change non-secret
-# defaults (ports/URLs/flags). Add provider API keys in the UI (Account → Provider
-# Keys). To run the PUBLISHED images instead of building, use docker-compose.hub.yml.
-#
-# SaaS is OFF: no Auth0, no Stripe/plans/credits, no external services. Auth is
-# local email + password.
+# Override the image namespace/tag with HDSEARCH_IMAGE_NS (default: hackerdogs)
+# and HDSEARCH_IMAGE_TAG (default: latest — mapped to the :api / :web tags).
 
 services:
   # ==========================================================================
-  # Datastores (internal-only — no host ports, isolated from your shared infra)
+  # Datastores (internal-only — no host ports)
   # ==========================================================================
   hds-db:
     image: timescale/timescaledb:latest-pg17
@@ -57,7 +43,7 @@ services:
       start_period: 30s
 
   hds-redis:
-    image: redis/redis-stack-server:latest   # Redis + RediSearch (HNSW ANN for vector search)
+    image: redis/redis-stack-server:latest
     container_name: hds-redis
     restart: unless-stopped
     environment:
@@ -84,9 +70,6 @@ services:
     networks: [hdsnet]
 
   hds-embeddings:
-    # Weaviate transformers-inference — serves POST /vectors; MiniLM-L6 → 384-dim
-    # (matches HDSEARCH_VECTOR_DIM=384). No native arm64 build → runs under
-    # emulation on Apple Silicon (works, just slower on first cold call).
     image: semitechnologies/transformers-inference:sentence-transformers-multi-qa-MiniLM-L6-cos-v1
     container_name: hds-embeddings
     restart: unless-stopped
@@ -107,7 +90,7 @@ services:
     image: karust/openserp:latest
     container_name: hds-openserp
     restart: unless-stopped
-    platform: linux/amd64   # no native arm64 image; runs under emulation
+    platform: linux/amd64
     command: ["serve", "-a", "0.0.0.0", "-p", "7000",
               "--allow_endpoint_fallback", "--timeout", "20",
               "--max_retries", "2", "--cache_ttl", "600", "--cache_max_size", "2000",
@@ -160,11 +143,10 @@ services:
     networks: [hdsnet]
 
   # ==========================================================================
-  # One-shot schema migration (runs, applies db/schema.sql, then exits)
+  # One-shot schema migration (published API image) — applies db/schema.sql
   # ==========================================================================
   hds-migrate:
-    build: ./api
-    image: hdsearch:api
+    image: ${HDSEARCH_IMAGE_NS:-hackerdogs}/hdsearch:api${HDSEARCH_IMAGE_TAG:+-${HDSEARCH_IMAGE_TAG}}
     container_name: hds-migrate
     command: ["node", "dist/scripts/migrate.js"]
     environment:
@@ -176,15 +158,13 @@ services:
     restart: "no"
 
   # ==========================================================================
-  # Application — aggregator API + Next.js UI
+  # Application — published API + Web images
   # ==========================================================================
   hds-api:
-    build: ./api
-    image: hdsearch:api
+    image: ${HDSEARCH_IMAGE_NS:-hackerdogs}/hdsearch:api${HDSEARCH_IMAGE_TAG:+-${HDSEARCH_IMAGE_TAG}}
     container_name: hds-api
     restart: unless-stopped
     environment:
-      # --- datastores (bundled above) ---
       - HDSEARCH_DATABASE_URL=postgres://${POSTGRES_USER:-hdsearch}:${POSTGRES_PASSWORD:-hdsearch}@hds-db:5432/${POSTGRES_DB:-hdsearch}
       - HDSEARCH_REDIS_URL=redis://hds-redis:6379/5
       - HDSEARCH_S3_ENDPOINT=http://hds-seaweedfs:8333
@@ -192,48 +172,33 @@ services:
       - STORAGE_AWS_SECRET_ACCESS_KEY=${STORAGE_AWS_SECRET_ACCESS_KEY:-hdsearch-secret}
       - STORAGE_AWS_REGION=us-east-1
       - HDSEARCH_BUCKET=hd-search
-      # --- embeddings / vector search ---
       - HDSEARCH_EMBEDDINGS_PROVIDER=minilm
       - HDSEARCH_EMBEDDINGS_URL=http://hds-embeddings:8080
       - HDSEARCH_VECTOR_DIM=384
-      # --- AI Mode: local LLMs via Ollama on the host (no key, $0). Models are
-      # discovered from whatever you've pulled. host.docker.internal reaches the
-      # host from the container (extra_hosts below covers Linux too). ---
+      # AI Mode: local LLMs via Ollama on the host (no key, $0).
       - HDSEARCH_OLLAMA_URL=${HDSEARCH_OLLAMA_URL:-http://host.docker.internal:11434}
-      # --- providers ---
       - HDSEARCH_OPENSERP_URL=http://hds-openserp:7000
       - HDSEARCH_OPENSERP_ENGINES=${HDSEARCH_OPENSERP_ENGINES:-google,yandex,bing,baidu}
       - HDSEARCH_SEARXNG_URL=http://hds-searxng:8080
       - HDSEARCH_CRAWL4AI_URL=http://hds-crawl4ai:11235
       - HDSEARCH_BROWSERLESS_URL=http://hds-browserless:3000
       - HDSEARCH_TOR_PROXY=socks5h://hds-tor:9050
-      # Maps geocoder: empty → public Photon (works out of the box). Self-host via
-      # the `maps` profile (hds-photon) and set HDSEARCH_GEOCODER_URL=http://hds-photon:2322
       - HDSEARCH_GEOCODER_ENGINE=photon
       - HDSEARCH_GEOCODER_URL=${HDSEARCH_GEOCODER_URL:-}
-      # --- secrets: NONE in env. The encryption / internal / session secrets are
-      # auto-generated on first boot and persisted to the shared `hds-secrets`
-      # volume (mounted below), so api & web agree automatically and the values
-      # survive restarts. Provider API keys are NOT set here — enter them in the UI
-      # (Account -> Provider Keys, or Admin -> Default Keys for system-wide keys).
+      # Secrets auto-generated into the shared volume — none in env.
       - HDSEARCH_SECRETS_FILE=/secrets/hdsearch-secrets.json
       - HDSEARCH_API_PORT=8791
-      # --- SaaS OFF: local/open-source mode ---
       - HDSEARCH_AUTH_MODE=legacy
-      # --- local auth (Phase 2) ---
-      # Optional headless admin bootstrap: set both to auto-create the admin on first
-      # run (otherwise the web UI shows a first-run "create admin account" screen).
+      # Optional headless admin (else create it in the UI on first run):
       - HDSEARCH_ADMIN_EMAIL=${HDSEARCH_ADMIN_EMAIL:-}
       - HDSEARCH_ADMIN_PASSWORD=${HDSEARCH_ADMIN_PASSWORD:-}
-      # Set true to allow open self-service signup (default: only the first-run admin,
-      # then registration is closed).
       - HDSEARCH_OPEN_SIGNUP=${HDSEARCH_OPEN_SIGNUP:-false}
     ports:
       - "${API_PORT:-8791}:8791"
     volumes:
       - hds-secrets:/secrets
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # reach a host-run Ollama from the container
+      - "host.docker.internal:host-gateway"
     depends_on:
       hds-db:
         condition: service_healthy
@@ -244,30 +209,23 @@ services:
     networks: [hdsnet]
 
   hds-web:
-    build: ./web
-    image: hdsearch:web
+    image: ${HDSEARCH_IMAGE_NS:-hackerdogs}/hdsearch:web${HDSEARCH_IMAGE_TAG:+-${HDSEARCH_IMAGE_TAG}}
     container_name: hds-web
     restart: unless-stopped
     environment:
       - HDSEARCH_API_URL=http://hds-api:8791
       - NEXT_PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:8791}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
-      # Shares the API's auto-generated internal + session secrets via /secrets.
       - HDSEARCH_SECRETS_FILE=/secrets/hdsearch-secrets.json
     ports:
       - "${WEB_PORT:-3000}:3000"
     volumes:
       - hds-secrets:/secrets
     depends_on:
-      # wait until the API is healthy so the shared secrets file already exists
       hds-api:
         condition: service_healthy
     networks: [hdsnet]
 
-  # ---- OPT-IN self-hosted OpenStreetMap geocoder (the `maps` modality) ----
-  # `docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml --profile maps up -d hds-photon`
-  # then set HDSEARCH_GEOCODER_URL=http://hds-photon:2322. Without it the API uses
-  # the public Photon instance (no setup). First run downloads a large OSM index.
   hds-photon:
     image: rtuszik/photon-docker:latest
     container_name: hds-photon
@@ -282,7 +240,7 @@ services:
     networks: [hdsnet]
 
 volumes:
-  hds-secrets:          # auto-generated crypto secrets, shared by api + web
+  hds-secrets:
   hds-postgres-data:
   hds-redis-data:
   hds-seaweedfs-data:
