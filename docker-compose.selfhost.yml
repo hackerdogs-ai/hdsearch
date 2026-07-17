@@ -193,6 +193,10 @@ services:
       - HDSEARCH_EMBEDDINGS_PROVIDER=minilm
       - HDSEARCH_EMBEDDINGS_URL=http://hds-embeddings:8080
       - HDSEARCH_VECTOR_DIM=384
+      # --- AI Mode: local LLMs via Ollama on the host (no key, $0). Models are
+      # discovered from whatever you've pulled. host.docker.internal reaches the
+      # host from the container (extra_hosts below covers Linux too). ---
+      - HDSEARCH_OLLAMA_URL=${HDSEARCH_OLLAMA_URL:-http://host.docker.internal:11434}
       # --- providers ---
       - HDSEARCH_OPENSERP_URL=http://hds-openserp:7000
       - HDSEARCH_OPENSERP_ENGINES=${HDSEARCH_OPENSERP_ENGINES:-google,yandex,bing,baidu}
@@ -225,6 +229,8 @@ services:
       - "${API_PORT:-8791}:8791"
     volumes:
       - hds-secrets:/secrets
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach a host-run Ollama from the container
     depends_on:
       hds-db:
         condition: service_healthy
