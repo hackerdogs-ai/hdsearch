@@ -1,8 +1,10 @@
 // Search history (server tiers). Anonymous/demo users keep history in the browser
-// only; signed-in users get a 3-day rolling history in Redis; paid users also get a
-// durable archive in S3/SeaweedFS. Recorded best-effort off the search hot path.
+// only; every signed-in (non-demo) user gets a 3-day rolling history in Redis PLUS
+// a durable S3/SeaweedFS archive — the open-source build has no paid tiers.
+// Recorded best-effort off the search hot path.
 import { redis, redisHealthy, k } from './store.js';
 import { archiveHistory, deleteHistoryArchives } from './storage.js';
+import { isDemoUser } from './auth.js';
 import { log, errFields } from './logger.js';
 
 export interface HistoryEntry {
@@ -16,13 +18,14 @@ export interface HistoryEntry {
 
 const MAX_ENTRIES = 200;
 const TTL_SEC = 3 * 24 * 3600; // 3 days (logged-in Redis tier)
-/** Plans whose users get a durable S3 archive on top of the Redis tier. Shared with
- *  ai-threads.ts so the AI-thread archive uses the exact same paid-plan gate. */
-export const PAID_PLANS = new Set(['devtest', 'production', 'enterprise', 'dev']);
+/** A durable S3 archive (on top of the Redis tier) is written for every real,
+ *  non-demo user. Shared with ai-threads.ts so the AI-thread archive uses the
+ *  exact same gate. (No paid tiers in the open-source build.) */
+export const archiveEligible = (userId: string): boolean => !isDemoUser(userId);
 
 const histKey = (userId: string) => k('history', userId);
 
-export async function recordHistory(userId: string, plan: string, entry: HistoryEntry): Promise<void> {
+export async function recordHistory(userId: string, entry: HistoryEntry): Promise<void> {
   // logged-in tier: 3-day rolling list in Redis
   if (redisHealthy()) {
     try {
@@ -34,8 +37,8 @@ export async function recordHistory(userId: string, plan: string, entry: History
       log.warn('history record failed', errFields(e));
     }
   }
-  // paid tier: durable S3/SeaweedFS archive
-  if (PAID_PLANS.has(plan)) {
+  // durable S3/SeaweedFS archive for every non-demo user
+  if (archiveEligible(userId)) {
     archiveHistory(userId, entry).catch((e) => log.warn('history archive failed', errFields(e)));
   }
 }
@@ -67,4 +70,4 @@ export async function clearHistory(userId: string): Promise<void> {
   if (redisHealthy()) await redis.del(histKey(userId)).catch((e) => log.warn('history clear failed', errFields(e)));
 }
 
-export const historyTierFor = (plan: string) => (PAID_PLANS.has(plan) ? 'redis+archive' : 'redis');
+export const historyTierFor = (userId: string) => (archiveEligible(userId) ? 'redis+archive' : 'redis');

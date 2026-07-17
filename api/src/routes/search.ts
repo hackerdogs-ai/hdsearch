@@ -58,7 +58,7 @@ searchRoutes.post('/', requireScope('search:read'), async (c) => {
       });
     }
     if (isFirstPage && !isDemoUser(p.userId) && !parsed.data.temporary) {
-      void recordHistory(p.userId, p.plan, {
+      void recordHistory(p.userId, {
         q: parsed.data.q,
         modality: parsed.data.modality,
         ts: Date.now(),

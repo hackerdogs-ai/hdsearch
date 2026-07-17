@@ -8,7 +8,7 @@
 // Best-effort: failures never block the chat path.
 import { redis, redisHealthy, k } from './store.js';
 import { log, errFields } from './logger.js';
-import { PAID_PLANS } from './history.js';
+import { archiveEligible } from './history.js';
 import { archiveAiThread, deleteAiThreadArchives } from './storage.js';
 import { deleteFilesForThread, deleteAllUserFiles } from './files/cascade.js';
 import { clearThreadFolder } from './files/folders.js';
@@ -91,13 +91,13 @@ function truncateBlob(blob: AiThreadBlob): AiThreadBlob {
 /**
  * Persist a thread blob.
  * - Redis (hot tier): always attempted for signed-in users, TTL 3 days, truncated blob.
- * - S3 (durable archive): fired in parallel for paid plans with the untruncated blob.
+ * - S3 (durable archive): fired in parallel for every non-demo user, untruncated blob.
  * Both paths are best-effort — failures are logged, never thrown.
  */
-export async function saveAiThread(blob: AiThreadBlob, plan?: string): Promise<void> {
+export async function saveAiThread(blob: AiThreadBlob): Promise<void> {
   // Fire the S3 archive with the FULL blob (unaffected by Redis truncation) before
-  // the hot-tier work, so a paid user's durable copy is written even if Redis is down.
-  if (plan && PAID_PLANS.has(plan)) {
+  // the hot-tier work, so the durable copy is written even if Redis is down.
+  if (archiveEligible(blob.userId)) {
     archiveAiThread(blob.userId, blob.threadId, blob, blob.updatedAt).catch((e) =>
       log.warn('ai thread archive failed', errFields(e)),
     );
@@ -260,4 +260,4 @@ export async function isFirstTurn(userId: string, threadId: string): Promise<boo
 
 /** Tier label for the /v1/ai/threads response — mirrors historyTierFor so the client
  *  can show the same "Synced · 3-day server history + durable archive (paid)" copy. */
-export const aiThreadTierFor = (plan: string) => (PAID_PLANS.has(plan) ? 'redis+archive' : 'redis');
+export const aiThreadTierFor = (userId: string) => (archiveEligible(userId) ? 'redis+archive' : 'redis');

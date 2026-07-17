@@ -162,7 +162,7 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
   // once per thread (not per turn) to keep the recents list from filling with duplicates.
   const firstTurn = persistable ? await isFirstTurn(p.userId, threadId) : false;
   if (persistable && firstTurn && userPrompt) {
-    void recordHistory(p.userId, p.plan, {
+    void recordHistory(p.userId, {
       q: userPrompt.slice(0, 500),
       modality: 'ai',
       ts: Date.now(),
@@ -290,7 +290,6 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
       if (persistable) {
         persistTurn({
           userId: p.userId,
-          plan: p.plan,
           threadId,
           firstTurn,
           title: body.title,
@@ -309,8 +308,6 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
 
 interface PersistTurnArgs {
   userId: string;
-  /** Plumbed so saveAiThread can gate the S3 archive on PAID_PLANS. */
-  plan: string;
   threadId: string;
   firstTurn: boolean;
   title?: string;
@@ -353,7 +350,7 @@ async function persistTurn(a: PersistTurnArgs): Promise<void> {
     messages,
     temporary: false,
   };
-  await saveAiThread(blob, a.plan);
+  await saveAiThread(blob);
 }
 
 function firstUserSnippet(msgs: { role: string; content: string }[]): string {

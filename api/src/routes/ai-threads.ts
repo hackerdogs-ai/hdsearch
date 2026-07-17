@@ -21,7 +21,7 @@ aiThreadRoutes.get('/', requireScope('search:read'), async (c) => {
   const p = c.get('principal');
   if (isDemoUser(p.userId)) return c.json({ entries: [], tier: 'browser' });
   const entries = await listAiThreadIndex(p.userId, Number(c.req.query('limit')) || 200);
-  return c.json({ entries, tier: aiThreadTierFor(p.plan) });
+  return c.json({ entries, tier: aiThreadTierFor(p.userId) });
 });
 
 aiThreadRoutes.get('/:id', requireScope('search:read'), async (c) => {

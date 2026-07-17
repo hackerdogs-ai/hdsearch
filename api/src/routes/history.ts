@@ -13,7 +13,7 @@ historyRoutes.get('/', requireScope('search:read'), async (c) => {
   const p = c.get('principal');
   if (isDemoUser(p.userId)) return c.json({ entries: [], tier: 'browser' });
   const entries = await listHistory(p.userId, Number(c.req.query('limit')) || 100);
-  return c.json({ entries, tier: historyTierFor(p.plan) });
+  return c.json({ entries, tier: historyTierFor(p.userId) });
 });
 
 historyRoutes.delete('/', requireScope('search:read'), async (c) => {
