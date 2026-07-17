@@ -8,7 +8,9 @@ A free, open-source alternative to SerpAPI + Perplexity that you run on your own
 box. Prioritized multi-engine search with fallback & dedup, a Redis cache,
 per-user **encrypted** provider keys, vector search + RAG over your own files,
 an agentic **AI Search** with tools, and an **MCP server** — TypeScript throughout.
-WHY? Because I was tired of paying subscriptions and credits to all these search providers. You don't need to index everything to search. What is Serp doing for you? It's just a wrapper on search APIs. I wanted a choice between multiple engines: free and paid. And I don't want long term index. AI agents can query, results are cached, you query the cache again and SAVE!!!
+
+**WHY?** 
+Because I was tired of paying subscriptions and credits to all these search providers. You don't need to index everything to search. What is Serp doing for you? It's just a wrapper on search APIs. I wanted a choice between multiple engines: free and paid. And I don't want long term index. AI agents can query, results are cached, you query the cache again and SAVE!!!
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Docker: hackerdogs/hdsearch](https://img.shields.io/badge/docker-hackerdogs%2Fhdsearch-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/hackerdogs/hdsearch)
