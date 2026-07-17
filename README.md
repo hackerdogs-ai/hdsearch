@@ -1,6 +1,6 @@
 <div align="center">
 
-# HD-Search
+# hdSearch (Stop paying for search API subscriptions)
 
 **One self-hosted API for search, crawl, vector search, and agentic AI answers — across 20+ engines.**
 
