@@ -1,132 +1,133 @@
 # HD-Search — Quickstart Deployment (5 minutes)
 
-The shortest path to a running HD-Search (API + web UI + search/crawl/vector + its
-own RediSearch). For the full reference see
+The shortest path to a running, fully self-hosted HD-Search (API + web UI +
+search/crawl/vector, with its own bundled Postgres, Redis/RediSearch, SeaweedFS,
+and embeddings). For the full reference see
 [CONFIGURATION_DEPLOYMENT.md](CONFIGURATION_DEPLOYMENT.md).
 
 ---
 
-## Prerequisites (one-time)
+## Prerequisites
 
-- **Docker** running, with the shared `hdnet` network and these containers up:
-  `hd-db` (TimescaleDB), `hd-seaweedfs`, `hd-weaviate-t2v` (embedder),
-  `hackerdogs-crawl4ai`, `hackerdogs-browserless`, `hackerdogs-tor-proxy`.
-  (HD-Search brings up its own `hdsearch-redis`, `hd-openserp`, `hd-searxng`.)
-- **Node 20+** (only for the local, non-Docker run).
-- The Postgres **superuser password** (to create the DB + roles the first time).
+- **Docker** with Compose. That's it — the self-host stack bundles every backend
+  it needs on its own private network. Nothing external, no accounts, no API keys
+  required to start.
 
 ---
 
-## Option A — Local, one command (recommended for dev)
+## Run it (one command)
 
 ```bash
-cd services/hd-search
-
-# 1) create DB + roles (first time only) — needs the superuser password
-PG_SUPER_PASSWORD='<hackerdogs password>' ./api/db/setup.sh
-
-# 2) start everything: API :8791 + Web :3030 + hdsearch-redis + openserp + searxng
-PG_SUPER_PASSWORD='<hackerdogs password>' ./start_hd_search_all.sh
+docker compose -f docker-compose.selfhost.yml up -d --build
 ```
 
-That's it. The script generates secrets, builds, migrates, starts the engines, and
-health-checks. Then:
+The first `up` pulls a few GB (embeddings + browsers + providers) and builds the
+API/web images, then auto-migrates the database. When it settles:
 
 ```bash
-open http://localhost:3030          # web UI (sign in → dev login works w/o Auth0)
-curl http://localhost:8791/healthz  # API health (all deps should be true)
+open http://localhost:3000            # first run → "create admin account" screen
+curl http://localhost:8791/healthz    # API health (bundled deps should be true)
 ```
 
-Get an API key and search:
+Create your admin account in the browser (the first account is the administrator),
+and you're in. **There is nothing to configure to start** — see *Secrets* below.
+
+Stop it: `docker compose -f docker-compose.selfhost.yml down`
+(add `-v` to also wipe the data/volumes).
+
+---
+
+## Get an API key and search
+
+API keys are managed in the UI: **Account → API Keys** (a default key is also
+issued when your account is created — copy it, it's shown once). Then:
 
 ```bash
-cd api && npx tsx scripts/hds-keys.ts issue --user me --name laptop   # prints sk-hds-…
 KEY=sk-hds-...
 curl http://localhost:8791/v1/search -H "authorization: Bearer $KEY" \
-  -H 'content-type: application/json' -d '{"q":"hackerdogs","mode":"aggregate","facets":true}'
+  -H 'content-type: application/json' \
+  -d '{"q":"open source search","mode":"aggregate","facets":true}'
 ```
 
-Stop everything: `./stop_hd_search.sh`
+(CLI alternative: `docker compose -f docker-compose.selfhost.yml exec hds-api \
+node dist/scripts/hds-keys.js issue --user me --name laptop`.)
 
 ---
 
-## Option B — Full Docker stack
+## Provider API keys — in the UI, never in a file
+
+Commercial engines (OpenAI, Brave, SerpAPI, …) are optional; the free/self-hosted
+engines work out of the box. To add commercial keys:
+
+- **Account → Provider Keys** — your own keys (stored AES-256-GCM encrypted in the DB).
+- **Dashboard → System Admin** — system-wide default keys (admin only).
+
+Never put provider keys in an env file.
+
+---
+
+## Secrets — automatic, nothing to set
+
+You don't set any secrets to run. The app's crypto secrets (encryption / internal
+BFF / web session) are **auto-generated on first boot** and persisted to the
+`hds-secrets` Docker volume, shared by the API and web containers so they agree
+and survive restarts.
+
+- **Disaster recovery:** the encryption key lives in the `hds-secrets` volume.
+  Back that volume up if you want stored provider keys to survive a full
+  `docker compose down -v`. It is reused across restarts, never rotated.
+- **Sign-in issues / "not authenticated"?** The session cookie is set on the
+  *same origin* you browse. Redirects honor `X-Forwarded-Host`/`X-Forwarded-Proto`
+  (then `Host`), so `localhost`, `127.0.0.1`, a custom port, or a reverse
+  proxy/tunnel all work. Behind a TLS proxy, make sure it forwards those headers
+  (Caddy/Nginx do by default) so the cookie is marked `Secure` for your real origin.
+
+---
+
+## Optional configuration
+
+Copy `.env.selfhost.example` → `.env.selfhost` only to change **non-secret**
+defaults (host ports, public URL, open signup, headless admin), then:
 
 ```bash
-cd services/hd-search
-cp api/.env.example api/.env       # set HDSEARCH_ENCRYPTION_KEY + HDSEARCH_DATABASE_URL (hdsearchrw)
-cp web/.env.example web/.env       # set HDSEARCH_INTERNAL_SECRET (same as api) + APP_BASE_URL
-docker network create hdnet 2>/dev/null || true
-
-# create DB + roles once
-PG_SUPER_PASSWORD='<pw>' ./api/db/setup.sh
-
-# build + start: api + web + hdsearch-redis + openserp + searxng (crawl4ai/browserless reused)
-./start_hd_search_stack.sh
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml up -d --build
 ```
 
-Web → http://localhost:3000, API → http://localhost:8791/healthz.
+Useful knobs: `WEB_PORT` / `API_PORT`, `PUBLIC_API_URL` / `APP_BASE_URL`,
+`HDSEARCH_OPEN_SIGNUP=true` (allow self-service signup), `HDSEARCH_ADMIN_EMAIL` +
+`HDSEARCH_ADMIN_PASSWORD` (create the admin headlessly instead of via the UI).
 
 ---
-
-## Secrets — zero-config local, explicit in prod
-
-You don't have to set any secrets to run locally. If `HDSEARCH_ENCRYPTION_KEY` and
-`HDSEARCH_INTERNAL_SECRET` are not provided via env, the API **auto-generates and
-persists** them to a shared file (`.hdsearch-secrets.json` at the service root, or
-`HDSEARCH_SECRETS_FILE`). The web app reads the same file, so the panel, API-key
-management, and **encrypted provider keys all work out of the box** — no more
-"encryption isn't configured" / "not authenticated" errors.
-
-- **Back up that file** — losing `encryptionKey` makes stored provider keys
-  unrecoverable. It is reused across restarts (not regenerated).
-- **Docker:** mount a volume at `HDSEARCH_SECRETS_FILE` (so it survives container
-  restarts), or set the env vars explicitly.
-- **Production:** set `HDSEARCH_ENCRYPTION_KEY`, `HDSEARCH_INTERNAL_SECRET`, and
-  `HDSEARCH_WEB_SESSION_SECRET` explicitly (env always wins) and back them up.
-
-**Sign-in shows nothing / "not authenticated" in the panel?** The session cookie must
-be set on the *same origin* you browse. Auth redirects follow the request's
-`X-Forwarded-Host`/`X-Forwarded-Proto` (then `Host`), so reaching the app via
-`localhost`, `127.0.0.1`, a custom port, or a reverse-proxy/tunnel all work without
-config changes. If you front it with a TLS proxy, make sure it forwards those headers
-(Caddy/Nginx do by default) so the cookie is marked `Secure` for your real origin.
 
 ## Going to production (checklist)
 
-1. **Secrets** — set strong, unique values and **back up** `HDSEARCH_ENCRYPTION_KEY`
-   (losing it makes stored provider keys unrecoverable):
-   - `HDSEARCH_ENCRYPTION_KEY` (`openssl rand -hex 32`)
-   - `HDSEARCH_INTERNAL_SECRET` (same in `api/.env` and `web/.env`)
-   - `HDSEARCH_WEB_SESSION_SECRET`
-   - Rotate the dev-default DB role passwords (see `api/db/CREDENTIALS.md`).
-2. **Run mode** — `RUN_MODE=prod` in `api/.env` (per-user keys only; no shared `.env` provider keys).
-3. **Auth0** — set `AUTH0_DOMAIN/CLIENT_ID/CLIENT_SECRET` in `web/.env`; add
-   `${APP_BASE_URL}/api/auth/callback` to Allowed Callback URLs; enable GitHub + Google connections.
-4. **Stripe** — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*`
-   in `api/.env`; point a webhook at `POST {API}/v1/billing/webhook`.
-5. **TLS + URLs** — serve behind your reverse proxy (Caddy); set `APP_BASE_URL` to
-   the public `https://…` (so session cookies are `Secure`); restrict
-   `HDSEARCH_CORS_ORIGINS` to your domains.
-6. **Darkweb (optional)** — `HDSEARCH_TOR_PROXY=socks5h://hackerdogs-tor-proxy:9050`
-   for Ahmia/Torch onion access.
-7. **OpenSERP Google (optional)** — add residential proxies or a 2captcha key
+1. **TLS + URLs** — serve behind a reverse proxy (Caddy/Nginx); set `PUBLIC_API_URL`
+   and `APP_BASE_URL` to your public `https://…` so session cookies are `Secure`;
+   restrict `HDSEARCH_CORS_ORIGINS` to your domains.
+2. **Back up volumes** — `hds-secrets` (crypto keys) and `hds-postgres-data`
+   (users, encrypted provider keys, history). Losing `hds-secrets` makes stored
+   provider keys unrecoverable.
+3. **Admin** — create the admin via the first-run screen, or set
+   `HDSEARCH_ADMIN_EMAIL`/`HDSEARCH_ADMIN_PASSWORD` for a headless bootstrap. Keep
+   `HDSEARCH_OPEN_SIGNUP` off unless you want public registration.
+4. **Darkweb (optional)** — the bundled Tor proxy powers Ahmia/Torch onion access.
+5. **OpenSERP Google (optional)** — add residential proxies or a 2captcha key
    (see [OPENSERP.md](OPENSERP.md)) to make Google contribute reliably.
-8. **Scale** — front the API/web with multiple replicas (both stateless); give
-   `hdsearch-redis` and `hd-db` adequate resources; set Timescale retention + S3
-   lifecycle. See [PERFORMANCE_SCALE_SECURITY.md](PERFORMANCE_SCALE_SECURITY.md).
+6. **Scale** — the API and web are stateless; run multiple replicas and give the
+   bundled Postgres/Redis adequate resources. See
+   [PERFORMANCE_SCALE_SECURITY.md](PERFORMANCE_SCALE_SECURITY.md).
 
 ---
 
 ## Smoke test (verify a deploy)
 
 ```bash
-curl -s $API/healthz | jq          # redis, postgres, seaweedfs, rediSearch all true
+API=http://localhost:8791
+curl -s $API/healthz | jq                 # redis, postgres, seaweedfs, rediSearch all true
 curl -s $API/v1/engines -H "authorization: Bearer $KEY" | jq '.count'   # engine catalog
-# search (fast, via searxng)
 curl -s $API/v1/search -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
   -d '{"q":"test","limit":3}' | jq '.total'
 ```
 
-If `healthz` shows a dependency `false`, check that container is on `hdnet` and the
-matching `HDSEARCH_*_URL` is correct.
+If `healthz` shows a dependency `false`, check that its container is healthy:
+`docker compose -f docker-compose.selfhost.yml ps`.
