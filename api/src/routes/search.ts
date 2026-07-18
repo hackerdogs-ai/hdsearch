@@ -92,6 +92,8 @@ searchRoutes.get('/', requireScope('search:read'), async (c) => {
     facets: c.req.query('facets') === 'true',
     searchDepth: c.req.query('searchDepth') || c.req.query('depth'),
     temporary: c.req.query('temporary') === 'true',
+    noCache: c.req.query('noCache') === 'true',
+    ttl: c.req.query('ttl') ? Number(c.req.query('ttl')) : undefined,
   });
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
 

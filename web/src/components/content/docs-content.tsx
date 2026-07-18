@@ -9,7 +9,7 @@ import { searchSnippets, crawlSnippets, vectorSnippets, engineSnippets, listEngi
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8791';
 
 const ENDPOINTS = [
-  { m: 'POST', p: '/v1/search', d: 'Aggregated search. Body: q, modality, engine?, mode(fallback|aggregate), limit, page, country?, lang?, freshness?, facets, noCache.' },
+  { m: 'POST', p: '/v1/search', d: 'Aggregated search. Body: q, modality, engine?, mode(fallback|aggregate), limit, page, country?, lang?, freshness?, facets, noCache, ttl? (sec; admin default if omitted or above hard max).' },
   { m: 'POST', p: '/v1/search/vector', d: 'Semantic KNN over a namespace. Body: q, namespace, k, groundWithWeb.' },
   { m: 'POST', p: '/v1/search/vector/index', d: 'Embed + index documents. Body: documents[], namespace, ttl (default 24h).' },
   { m: 'POST', p: '/v1/crawl', d: 'Crawl a URL. Body: url, engine?, formats[](markdown|text|html|links|images|screenshot|pdf), render, store. screenshot/pdf return data URLs.' },

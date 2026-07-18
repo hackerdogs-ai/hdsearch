@@ -67,7 +67,8 @@ crawlRoutes.get('/', requireScope('crawl:read'), async (c) => {
     engine: c.req.query('engine'),
     render: c.req.query('render') === 'true',
     store: c.req.query('store') === 'true',
-    noCache: c.req.query('no_cache') === 'true',
+    noCache: c.req.query('no_cache') === 'true' || c.req.query('noCache') === 'true',
+    ttl: c.req.query('ttl') ? Number(c.req.query('ttl')) : undefined,
   });
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
   const quota = await checkQuota(p.userId, p.plan, 'crawl');

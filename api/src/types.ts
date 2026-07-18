@@ -114,6 +114,11 @@ export const SearchRequestSchema = z.object({
   facets: z.boolean().default(false),
   /** bypass cache for this call */
   noCache: z.boolean().default(false),
+  /**
+   * Redis result-cache TTL in seconds. When omitted or greater than the admin
+   * hard max, the admin default TTL is used. Ignored when noCache is true.
+   */
+  ttl: z.number().int().min(1).max(60 * 60 * 24 * 30).optional(),
 });
 export type SearchRequest = z.infer<typeof SearchRequestSchema>;
 
@@ -127,6 +132,11 @@ export const CrawlRequestSchema = z.object({
   /** archive the raw payload to S3 */
   store: z.boolean().default(false),
   noCache: z.boolean().default(false),
+  /**
+   * Redis result-cache TTL in seconds. When omitted or greater than the admin
+   * hard max, the admin default TTL is used. Ignored when noCache is true.
+   */
+  ttl: z.number().int().min(1).max(60 * 60 * 24 * 30).optional(),
   /** When true, provider failures log at debug without stack (AI RAG enrichment). */
   quiet: z.boolean().default(false),
   timeoutMs: z.number().int().min(1000).max(60000).optional(),

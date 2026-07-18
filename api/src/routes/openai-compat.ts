@@ -85,9 +85,6 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
 
   // Resolve model — system messages become part of the prompt, user/assistant passed through
   let model = body.model ? getModel(body.model) : undefined;
-  if (model && model.plans?.length && !model.plans.includes(p.plan)) {
-    return c.json({ error: { message: `Model ${model.id} not available on your plan`, type: 'invalid_request_error', param: 'model', code: 'model_not_found' } }, 404);
-  }
   let fallbacks: LlmModel[] = [];
   if (!model) {
     const promptTokens = Math.ceil(body.messages.reduce((n, m) => n + m.content.length, 0) / 4) + 1200;

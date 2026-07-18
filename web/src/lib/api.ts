@@ -156,4 +156,7 @@ export const api = {
   adminLlmProviders: () => apiCall('/v1/admin/llm-providers'),
   adminGetSignup: () => apiCall('/v1/admin/signup'),
   adminSetSignup: (allow: boolean) => apiCall('/v1/admin/signup', { body: { allow }, method: 'PUT' }),
+  adminGetCacheTtl: () => apiCall('/v1/admin/cache-ttl'),
+  adminSetCacheTtl: (body: { defaultSec: number; maxSec: number }) =>
+    apiCall('/v1/admin/cache-ttl', { body, method: 'PUT' }),
 };

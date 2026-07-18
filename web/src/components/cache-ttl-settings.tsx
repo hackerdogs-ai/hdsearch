@@ -20,12 +20,13 @@ interface Prefs {
 export function CacheTtlSettings() {
   const [prefs, setPrefs] = useState<Prefs>({ disabled: [], ranks: {}, cacheTtlSec: DEFAULT_SEC });
   const [maxSec, setMaxSec] = useState<number>(86400);
+  const [defaultSec, setDefaultSec] = useState<number>(DEFAULT_SEC);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const selected = prefs.cacheTtlSec ?? DEFAULT_SEC;
+  const selected = prefs.cacheTtlSec ?? defaultSec;
 
   useEffect(() => {
     fetch('/api/panel/provider-prefs')
@@ -38,6 +39,9 @@ export function CacheTtlSettings() {
         if (data.prefs) setPrefs(data.prefs);
         if (typeof data.cacheTtlLimits?.maxSec === 'number') {
           setMaxSec(data.cacheTtlLimits.maxSec);
+        }
+        if (typeof data.cacheTtlLimits?.defaultSec === 'number') {
+          setDefaultSec(data.cacheTtlLimits.defaultSec);
         }
         setLoaded(true);
       })
@@ -91,10 +95,10 @@ export function CacheTtlSettings() {
         <div>
           <h2 className="text-lg font-semibold text-ink-900">Result cache</h2>
           <p className="mt-1 max-w-xl text-sm text-ink-500">
-            How long search and crawl results are reused before fetching live again from providers. Applies to all
-            engines for your account, including when AI Search runs search or crawl tools.
+            How long search and crawl results are reused when a request does not set{' '}
+            <code className="text-xs">ttl</code>. API calls may override this (up to the admin hard max).
           </p>
-          <p className="mt-1 text-sm text-ink-400">Your plan allows up to {maxLabel}.</p>
+          <p className="mt-1 text-sm text-ink-400">Maximum cache duration: {maxLabel}.</p>
         </div>
         {message && (
           <span className={`text-sm ${message === 'Saved' ? 'text-brand-700' : 'text-red-600'}`}>{message}</span>

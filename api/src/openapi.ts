@@ -42,6 +42,11 @@ export function openapiDoc() {
                     freshness: { type: 'string' },
                     facets: { type: 'boolean', default: false },
                     noCache: { type: 'boolean', default: false },
+                    ttl: {
+                      type: 'integer',
+                      description:
+                        'Redis result-cache TTL in seconds. Admin default used when omitted or above hard max. Ignored when noCache is true.',
+                    },
                   },
                 },
               },

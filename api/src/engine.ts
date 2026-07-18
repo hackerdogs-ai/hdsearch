@@ -10,8 +10,8 @@
 import { env } from './env.js';
 import { log, errFields } from './logger.js';
 import { computed } from './cache.js';
-import { DEFAULT_CACHE_TTL_SEC, resolveUserCacheTtlSec } from './cache-ttl.js';
-import { isDemoUser, planForUser } from './auth.js';
+import { resolveRequestCacheTtlSec, resolveUserCacheTtlSec } from './cache-ttl.js';
+import { isDemoUser } from './auth.js';
 import { getProviderPrefs } from './provider-prefs.js';
 import { dedupe, rankAggregate } from './normalize.js';
 import { computeFacets } from './facets.js';
@@ -54,10 +54,12 @@ interface EngineOutcome {
 
 const ttlFor = (_p: SearchProvider | CrawlProvider, cacheTtlSec: number) => cacheTtlSec;
 
-async function cacheTtlForUser(userId?: string): Promise<number> {
-  if (!userId || isDemoUser(userId)) return DEFAULT_CACHE_TTL_SEC;
-  const [prefs, plan] = await Promise.all([getProviderPrefs(userId), planForUser(userId)]);
-  return resolveUserCacheTtlSec(prefs.cacheTtlSec, plan);
+/** Per-request `ttl` wins; otherwise account pref / admin default (over-max → default). */
+async function cacheTtlForRequest(reqTtl: number | undefined, userId?: string): Promise<number> {
+  if (reqTtl != null) return resolveRequestCacheTtlSec(reqTtl);
+  if (!userId || isDemoUser(userId)) return resolveRequestCacheTtlSec(undefined);
+  const prefs = await getProviderPrefs(userId);
+  return resolveUserCacheTtlSec(prefs.cacheTtlSec);
 }
 
 function cacheKeyForSearch(p: SearchProvider, req: SearchRequest, userId?: string): string {
@@ -102,7 +104,7 @@ async function runSearchProvider(
 
 export async function runSearch(req: SearchRequest, userId?: string): Promise<SearchResponse> {
   const t0 = Date.now();
-  const cacheTtlSec = await cacheTtlForUser(userId);
+  const cacheTtlSec = await cacheTtlForRequest(req.ttl, userId);
   const mode = effectiveSearchMode(req);
   const { usable, skipped } = await resolveSearchCandidates(req.modality, userId, req.engine);
   const enginesUsed: EngineOutcome[] = [];
@@ -199,7 +201,7 @@ export interface CrawlEngineResponse {
 
 export async function runCrawl(req: CrawlRequest, userId?: string): Promise<CrawlEngineResponse> {
   const t0 = Date.now();
-  const cacheTtlSec = await cacheTtlForUser(userId);
+  const cacheTtlSec = await cacheTtlForRequest(req.ttl, userId);
   const { usable, skipped } = await resolveCrawlCandidates(userId, req.engine);
   const enginesUsed: EngineOutcome[] = [];
 

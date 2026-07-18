@@ -15,7 +15,6 @@ export async function AccountKeysSection({
   let encryptionAvailable = false;
   let searchProviders: { id: string; label: string; requiresKeys: string[] }[] = [];
   let llmProviders: { id: string; label: string; requiresKeys: string[] }[] = [];
-  let plan = 'free';
   let errors: string[] = [];
 
   await Promise.all([
@@ -42,9 +41,6 @@ export async function AccountKeysSection({
         requiresKeys: p.requiresKeys || [],
       }));
     }).catch(() => {}),
-    api.account().then((r) => (plan = r.plan?.id || 'free')).catch((e) => {
-      rethrowIfRedirect(e);
-    }),
   ]);
 
   return (
@@ -65,9 +61,6 @@ export async function AccountKeysSection({
           <div>
             <div className="text-lg font-medium text-ink-900">{user?.name}</div>
             <div className="text-sm text-ink-500">{user?.email}</div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="chip bg-brand-50 text-brand-700">Plan: {plan}</span>
-            </div>
           </div>
         </div>
       </div>

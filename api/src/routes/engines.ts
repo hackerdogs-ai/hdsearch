@@ -10,10 +10,9 @@ import { MODALITIES } from '../types.js';
 import { hasKeysFor } from '../keystore.js';
 import { getProviderPrefs, setProviderPrefs } from '../provider-prefs.js';
 import {
-  allowedCacheTtlSecForPlan,
-  cacheTtlOptionsForPlan,
-  DEFAULT_CACHE_TTL_SEC,
-  maxCacheTtlSecForPlan,
+  allowedCacheTtlSec,
+  cacheTtlOptions,
+  getAdminCacheTtlLimits,
   normalizeCacheTtlSec,
 } from '../cache-ttl.js';
 import { log, errFields } from '../logger.js';
@@ -45,12 +44,14 @@ engineRoutes.get('/', async (c) => {
 engineRoutes.get('/prefs', async (c) => {
   const p = c.get('principal');
   const prefs = await getProviderPrefs(p.userId);
-  const cacheTtlSec = normalizeCacheTtlSec(prefs.cacheTtlSec, p.plan);
+  const cacheTtlSec = normalizeCacheTtlSec(prefs.cacheTtlSec);
+  const admin = getAdminCacheTtlLimits();
   return c.json({
     prefs: { ...prefs, cacheTtlSec },
     cacheTtlLimits: {
-      maxSec: maxCacheTtlSecForPlan(p.plan),
-      options: cacheTtlOptionsForPlan(p.plan),
+      defaultSec: admin.defaultSec,
+      maxSec: admin.maxSec,
+      options: cacheTtlOptions(),
     },
   });
 });
@@ -73,17 +74,17 @@ engineRoutes.put('/prefs', async (c) => {
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
   try {
     const current = await getProviderPrefs(p.userId);
-    const planAllowed = allowedCacheTtlSecForPlan(p.plan);
+    const allowed = allowedCacheTtlSec();
     const merged = {
       disabled: parsed.data.disabled ?? current.disabled,
       ranks: parsed.data.ranks ?? current.ranks,
       cacheTtlSec:
         parsed.data.cacheTtlSec != null
-          ? normalizeCacheTtlSec(parsed.data.cacheTtlSec, p.plan)
-          : normalizeCacheTtlSec(current.cacheTtlSec ?? DEFAULT_CACHE_TTL_SEC, p.plan),
+          ? normalizeCacheTtlSec(parsed.data.cacheTtlSec)
+          : normalizeCacheTtlSec(current.cacheTtlSec),
     };
-    if (merged.cacheTtlSec != null && !planAllowed.has(merged.cacheTtlSec)) {
-      return c.json({ error: 'bad_request', message: 'cacheTtlSec exceeds plan limit' }, 400);
+    if (merged.cacheTtlSec != null && !allowed.has(merged.cacheTtlSec)) {
+      return c.json({ error: 'bad_request', message: 'cacheTtlSec exceeds the configured maximum' }, 400);
     }
     await setProviderPrefs(p.userId, merged);
     return c.json({ ok: true, prefs: merged });

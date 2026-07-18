@@ -57,6 +57,11 @@ export interface RuntimeConfig {
   /** Admin toggle for open sign-up. Unset = fall back to env / built-in default
    *  (open). false = invite-only (admin creates accounts). */
   allowSignup?: boolean;
+  /** Default Redis result-cache TTL (seconds) when a request omits `ttl`
+   *  or requests a value above the hard max. */
+  defaultCacheTtlSec?: number;
+  /** Hard max Redis result-cache TTL (seconds) for API/`ttl` and account prefs. */
+  maxCacheTtlSec?: number;
 }
 
 /** The service keys the wizard/settings can configure, in display order. */
@@ -87,6 +92,8 @@ export function saveConfig(patch: RuntimeConfig): RuntimeConfig {
   }
   if (typeof patch.setupComplete === 'boolean') merged.setupComplete = patch.setupComplete;
   if (typeof patch.allowSignup === 'boolean') merged.allowSignup = patch.allowSignup;
+  if (typeof patch.defaultCacheTtlSec === 'number') merged.defaultCacheTtlSec = patch.defaultCacheTtlSec;
+  if (typeof patch.maxCacheTtlSec === 'number') merged.maxCacheTtlSec = patch.maxCacheTtlSec;
   mkdirSync(dirname(CONFIG_FILE), { recursive: true });
   writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 });
   cache = merged;
@@ -104,6 +111,18 @@ export function isSetupComplete(): boolean {
 /** Admin's persisted sign-up policy, or undefined if never set (use env/default). */
 export function getAllowSignup(): boolean | undefined {
   return loadConfig().allowSignup;
+}
+
+/** Admin's persisted default result-cache TTL (seconds), or undefined if unset. */
+export function getDefaultCacheTtlSec(): number | undefined {
+  const v = loadConfig().defaultCacheTtlSec;
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** Admin's persisted hard-max result-cache TTL (seconds), or undefined if unset. */
+export function getMaxCacheTtlSec(): number | undefined {
+  const v = loadConfig().maxCacheTtlSec;
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
 /** Resolve a value: config-file → env → default. */

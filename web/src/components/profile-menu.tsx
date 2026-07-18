@@ -12,7 +12,6 @@ export interface ProfileMenuProps {
   email?: string;
   picture?: string;
   role?: string; // 'admin' | 'user'
-  plan?: string; // display label, e.g. "Free"
 }
 
 function initialsOf(name?: string, email?: string): string {
@@ -35,7 +34,7 @@ const ITEMS = [
 const MENU_ITEM_CLASS =
   'flex cursor-pointer items-center gap-2.5 px-4 py-2 text-sm text-ink-700 hover:bg-ink-50';
 
-export function ProfileMenu({ name, email, picture, role, plan }: ProfileMenuProps) {
+export function ProfileMenu({ name, email, picture, role }: ProfileMenuProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({ top: 0, left: 0 });
@@ -107,10 +106,11 @@ export function ProfileMenu({ name, email, picture, role, plan }: ProfileMenuPro
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-ink-900">{name || 'User'}</div>
           <div className="truncate text-sm text-ink-400">{email}</div>
-          <div className="mt-1 flex items-center gap-1.5">
-            {isAdmin && <span className="chip bg-ink-900 px-1.5 py-0 text-sm text-white">Admin</span>}
-            <span className="chip bg-brand-50 px-1.5 py-0 text-sm text-brand-700">Plan: {plan || 'Free'}</span>
-          </div>
+          {isAdmin && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="chip bg-ink-900 px-1.5 py-0 text-sm text-white">Admin</span>
+            </div>
+          )}
         </div>
       </div>
 

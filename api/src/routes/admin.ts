@@ -7,6 +7,11 @@ import { requireAuth, requireScope } from '../auth.js';
 import { encryptionAvailable } from '../crypto.js';
 import { saveConfig } from '../runtime-config.js';
 import { signupAllowed } from './auth-local.js';
+import {
+  ALLOWED_CACHE_TTL_SEC,
+  CACHE_TTL_OPTIONS,
+  getAdminCacheTtlLimits,
+} from '../cache-ttl.js';
 import { listDefaultKeys, upsertDefaultKey, deleteDefaultKey } from '../ai/default-keys.js';
 import { getProviderMeta, getPlanAccess, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
 import { upsertModel, deleteModel } from '../ai/model-registry-db.js';
@@ -83,6 +88,37 @@ adminRoutes.put('/signup', async (c) => {
   saveConfig({ allowSignup: parsed.data.allow });
   log.info('admin: set signup policy', { allowSignup: parsed.data.allow, admin: p.userId });
   return c.json({ allowSignup: parsed.data.allow });
+});
+
+// GET /v1/admin/cache-ttl — effective default + hard-max result-cache TTL
+adminRoutes.get('/cache-ttl', (c) => {
+  const limits = getAdminCacheTtlLimits();
+  return c.json({ ...limits, options: CACHE_TTL_OPTIONS });
+});
+
+const CacheTtlAdminSchema = z.object({
+  defaultSec: z.number().int().positive(),
+  maxSec: z.number().int().positive(),
+});
+
+// PUT /v1/admin/cache-ttl — set system default + hard max (default must be ≤ max)
+adminRoutes.put('/cache-ttl', async (c) => {
+  const parsed = CacheTtlAdminSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
+  const { defaultSec, maxSec } = parsed.data;
+  if (!ALLOWED_CACHE_TTL_SEC.has(defaultSec) || !ALLOWED_CACHE_TTL_SEC.has(maxSec)) {
+    return c.json({
+      error: 'bad_request',
+      message: `defaultSec and maxSec must be one of: ${[...ALLOWED_CACHE_TTL_SEC].join(', ')}`,
+    }, 400);
+  }
+  if (defaultSec > maxSec) {
+    return c.json({ error: 'bad_request', message: 'defaultSec must be ≤ maxSec' }, 400);
+  }
+  const p = c.get('principal');
+  saveConfig({ defaultCacheTtlSec: defaultSec, maxCacheTtlSec: maxSec });
+  log.info('admin: set cache TTL limits', { defaultSec, maxSec, admin: p.userId });
+  return c.json({ defaultSec, maxSec, options: CACHE_TTL_OPTIONS });
 });
 
 // GET /v1/admin/llm-providers — registry metadata (no secrets)

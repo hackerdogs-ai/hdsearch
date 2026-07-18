@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { api, ApiError } from '@/lib/api';
 import { SystemDefaultKeys } from '@/components/system-default-keys';
 import { SignupPolicy } from '@/components/signup-policy';
+import { CacheTtlPolicy } from '@/components/cache-ttl-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,8 @@ export default async function AdminPage() {
       </div>
 
       <SignupPolicy />
+
+      <CacheTtlPolicy />
 
       <a
         href="/dashboard/admin/infrastructure"

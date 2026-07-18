@@ -1,8 +1,10 @@
-/** Unified search/crawl result cache TTL — one value per user, all providers. */
+/** Unified search/crawl result cache TTL — admin default/max + optional per-request override. */
 
-import type { PlanId } from './plans.js';
+import { getDefaultCacheTtlSec, getMaxCacheTtlSec } from './runtime-config.js';
 
 export const DEFAULT_CACHE_TTL_SEC = 900; // 15 minutes
+/** Built-in hard max when admin has not configured one (24 hours). */
+export const DEFAULT_MAX_CACHE_TTL_SEC = 86400;
 
 export const CACHE_TTL_OPTIONS = [
   { sec: 900, label: '15 min' },
@@ -13,47 +15,70 @@ export const CACHE_TTL_OPTIONS = [
 
 export const ALLOWED_CACHE_TTL_SEC = new Set<number>(CACHE_TTL_OPTIONS.map((o) => o.sec));
 
-/** Max selectable cache TTL per plan tier (Result cache slider ceiling). */
-export const MAX_CACHE_TTL_SEC_BY_PLAN: Record<PlanId, number> = {
-  free: 1800,
-  dev: 1800,
-  devtest: 3600,
-  production: 86400,
-  enterprise: 86400,
-};
-
-export function maxCacheTtlSecForPlan(plan: string): number {
-  const id = plan as PlanId;
-  return MAX_CACHE_TTL_SEC_BY_PLAN[id] ?? MAX_CACHE_TTL_SEC_BY_PLAN.dev;
+export interface CacheTtlLimits {
+  defaultSec: number;
+  maxSec: number;
 }
 
-export function cacheTtlOptionsForPlan(plan: string): typeof CACHE_TTL_OPTIONS[number][] {
-  const max = maxCacheTtlSecForPlan(plan);
+/** Resolve admin/env/built-in default + hard max (default is never above max). */
+export function getAdminCacheTtlLimits(): CacheTtlLimits {
+  const maxRaw = getMaxCacheTtlSec();
+  const maxEnv = process.env.HDSEARCH_MAX_CACHE_TTL;
+  let maxSec =
+    typeof maxRaw === 'number' && maxRaw > 0
+      ? Math.floor(maxRaw)
+      : maxEnv && Number(maxEnv) > 0
+        ? Math.floor(Number(maxEnv))
+        : DEFAULT_MAX_CACHE_TTL_SEC;
+
+  const defRaw = getDefaultCacheTtlSec();
+  const defEnv = process.env.HDSEARCH_DEFAULT_CACHE_TTL;
+  let defaultSec =
+    typeof defRaw === 'number' && defRaw > 0
+      ? Math.floor(defRaw)
+      : defEnv && Number(defEnv) > 0
+        ? Math.floor(Number(defEnv))
+        : DEFAULT_CACHE_TTL_SEC;
+
+  if (defaultSec > maxSec) defaultSec = maxSec;
+  return { defaultSec, maxSec };
+}
+
+/**
+ * Resolve the Redis cache TTL for a request.
+ * Uses `ttl` when set and ≤ hard max; otherwise the admin default
+ * (also when ttl is missing, non-positive, or greater than max).
+ */
+export function resolveRequestCacheTtlSec(
+  ttl?: number | null,
+  limits?: Partial<CacheTtlLimits>,
+): number {
+  const admin = getAdminCacheTtlLimits();
+  const maxSec = limits?.maxSec ?? admin.maxSec;
+  const defaultSec = Math.min(limits?.defaultSec ?? admin.defaultSec, maxSec);
+  if (ttl == null || !Number.isFinite(ttl) || ttl < 1 || ttl > maxSec) return defaultSec;
+  return Math.floor(ttl);
+}
+
+/** Highest selectable cache TTL — the admin/env hard max (no per-plan clamp). */
+export function maxCacheTtlSec(): number {
+  return getAdminCacheTtlLimits().maxSec;
+}
+
+export function cacheTtlOptions(): (typeof CACHE_TTL_OPTIONS)[number][] {
+  const max = maxCacheTtlSec();
   return CACHE_TTL_OPTIONS.filter((o) => o.sec <= max);
 }
 
-export function allowedCacheTtlSecForPlan(plan: string): Set<number> {
-  return new Set(cacheTtlOptionsForPlan(plan).map((o) => o.sec));
+export function allowedCacheTtlSec(): Set<number> {
+  return new Set(cacheTtlOptions().map((o) => o.sec));
 }
 
-/** Clamp a TTL to the highest allowed option at or below the value for this plan. */
-export function clampCacheTtlSec(sec: number, plan: string): number {
-  const allowed = allowedCacheTtlSecForPlan(plan);
-  if (allowed.has(sec)) return sec;
-  const max = maxCacheTtlSecForPlan(plan);
-  const fit = [...cacheTtlOptionsForPlan(plan)].reverse().find((o) => o.sec <= sec);
-  if (fit) return fit.sec;
-  return cacheTtlOptionsForPlan(plan)[0]?.sec ?? Math.min(DEFAULT_CACHE_TTL_SEC, max);
-}
-
-export function normalizeCacheTtlSec(value: unknown, plan?: string): number {
+export function normalizeCacheTtlSec(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value);
-  const base = ALLOWED_CACHE_TTL_SEC.has(n) ? n : DEFAULT_CACHE_TTL_SEC;
-  return plan ? clampCacheTtlSec(base, plan) : base;
+  return resolveRequestCacheTtlSec(ALLOWED_CACHE_TTL_SEC.has(n) ? n : undefined);
 }
 
-export function resolveUserCacheTtlSec(cacheTtlSec?: number, plan?: string): number {
-  const raw =
-    cacheTtlSec != null && ALLOWED_CACHE_TTL_SEC.has(cacheTtlSec) ? cacheTtlSec : DEFAULT_CACHE_TTL_SEC;
-  return plan ? clampCacheTtlSec(raw, plan) : raw;
+export function resolveUserCacheTtlSec(cacheTtlSec?: number): number {
+  return resolveRequestCacheTtlSec(cacheTtlSec);
 }
