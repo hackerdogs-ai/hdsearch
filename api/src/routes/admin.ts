@@ -16,6 +16,7 @@ import { listDefaultKeys, upsertDefaultKey, deleteDefaultKey } from '../ai/defau
 import { getProviderMeta, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
 import { upsertModel, deleteModel, loadAllModelsForAdmin, upsertProvider, deleteProvider } from '../ai/model-registry-db.js';
 import { refreshCustomProviders, allProviderIds } from '../ai/providers/index.js';
+import { smtpSettings, verifySmtp, sendMail, invalidateSmtpTransport, SMTP_PASSWORD_FIELD } from '../email.js';
 import { log, errFields } from '../logger.js';
 
 /** Provider ids compiled into the image — these can never be overwritten or deleted. */
@@ -120,6 +121,70 @@ adminRoutes.put('/cache-ttl', async (c) => {
   saveConfig({ defaultCacheTtlSec: defaultSec, maxCacheTtlSec: maxSec });
   log.info('admin: set cache TTL limits', { defaultSec, maxSec, admin: p.userId });
   return c.json({ defaultSec, maxSec, options: CACHE_TTL_OPTIONS });
+});
+
+// GET /v1/admin/email — SMTP settings (never returns the password itself)
+adminRoutes.get('/email', async (c) => {
+  const s = await smtpSettings();
+  return c.json({ smtp: s, enabled: !!(s.host && s.from) });
+});
+
+const SmtpSchema = z.object({
+  host: z.string().max(255).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  user: z.string().max(255).optional(),
+  from: z.string().max(320).optional(),
+  secure: z.boolean().optional(),
+  /** Omit to leave the stored password untouched; empty string clears it. */
+  password: z.string().max(1024).optional(),
+});
+
+// PUT /v1/admin/email — save SMTP settings; the password is AES-256-GCM encrypted.
+adminRoutes.put('/email', async (c) => {
+  const parsed = SmtpSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
+  const p = c.get('principal');
+  const { password, ...settings } = parsed.data;
+  try {
+    saveConfig({ smtp: settings });
+    if (typeof password === 'string') {
+      if (!password) {
+        await deleteDefaultKey(SMTP_PASSWORD_FIELD);
+      } else {
+        if (!encryptionAvailable()) {
+          return c.json({ error: 'unavailable', message: 'HDSEARCH_ENCRYPTION_KEY not configured' }, 503);
+        }
+        await upsertDefaultKey('smtp', SMTP_PASSWORD_FIELD, password, 'SMTP password', p.userId);
+      }
+    }
+    invalidateSmtpTransport();
+    log.info('admin: smtp settings saved', { host: settings.host, admin: p.userId });
+    return c.json({ smtp: await smtpSettings() });
+  } catch (e) {
+    log.error('admin: smtp save failed', errFields(e));
+    return c.json({ error: 'server_error', message: (e as Error).message }, 500);
+  }
+});
+
+const SmtpTestSchema = z.object({ to: z.string().email().optional() });
+
+// POST /v1/admin/email/test — verify the connection, optionally sending a test message.
+adminRoutes.post('/email/test', async (c) => {
+  const parsed = SmtpTestSchema.safeParse(await c.req.json().catch(() => ({})));
+  const to = parsed.success ? parsed.data.to : undefined;
+  const v = await verifySmtp();
+  if (!v.ok) return c.json({ ok: false, error: v.error }, 200);
+  if (!to) return c.json({ ok: true, message: 'SMTP connection verified.' });
+  const sent = await sendMail({
+    to,
+    subject: 'hdsearch test email',
+    text: 'This is a test message from your hdsearch instance. Email is configured correctly.',
+  });
+  return c.json(
+    sent
+      ? { ok: true, message: `Test email sent to ${to}.` }
+      : { ok: false, error: 'Connection verified but the message could not be sent — check the logs.' },
+  );
 });
 
 // GET /v1/admin/llm-providers — registry metadata (no secrets)

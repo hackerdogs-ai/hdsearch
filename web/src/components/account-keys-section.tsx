@@ -1,6 +1,7 @@
 import { api, ApiError, rethrowIfRedirect } from '@/lib/api';
 import { getSession } from '@/lib/session';
 import { ApiKeysManager } from '@/components/api-keys-manager';
+import { ChangePassword } from '@/components/change-password';
 import { CacheTtlSettings } from '@/components/cache-ttl-settings';
 import { ProviderKeysManager } from '@/components/provider-keys-manager';
 
@@ -64,6 +65,8 @@ export async function AccountKeysSection({
           </div>
         </div>
       </div>
+
+      <ChangePassword />
 
       <CacheTtlSettings />
 

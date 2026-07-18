@@ -5,7 +5,7 @@ import { config } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
-type AuthStatus = { localAuthEnabled: boolean; setupRequired: boolean; openSignup: boolean };
+type AuthStatus = { localAuthEnabled: boolean; setupRequired: boolean; openSignup: boolean; emailEnabled?: boolean };
 
 // Ask the API whether local auth is on and whether this is first-run (no admin yet).
 async function getAuthStatus(): Promise<AuthStatus | null> {
@@ -20,6 +20,7 @@ async function getAuthStatus(): Promise<AuthStatus | null> {
 
 const ERROR_LABELS: Record<string, string> = {
   invalid_credentials: 'Incorrect email or password.',
+  invalid_token: 'That sign-in link is invalid or has expired. Request a new one.',
   registration_closed: 'Registration is closed — ask an admin to create your account.',
   conflict: 'An account with that email already exists. Try signing in.',
   missing_fields: 'Please enter your email and password.',
@@ -46,7 +47,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
           <div className="mb-6 flex justify-center">
             <Brand />
           </div>
-          <AuthCard firstRun={firstRun} openSignup={!!status?.openSignup} error={errMsg} />
+          <AuthCard firstRun={firstRun} openSignup={!!status?.openSignup} emailEnabled={!!status?.emailEnabled} error={errMsg} />
         </div>
       </div>
     );

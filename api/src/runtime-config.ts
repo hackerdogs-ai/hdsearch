@@ -62,6 +62,14 @@ export interface RuntimeConfig {
   defaultCacheTtlSec?: number;
   /** Hard max Redis result-cache TTL (seconds) for API/`ttl` and account prefs. */
   maxCacheTtlSec?: number;
+  /** Admin-configured SMTP (non-secret parts; the password is encrypted in the DB). */
+  smtp?: {
+    host?: string;
+    port?: number;
+    user?: string;
+    from?: string;
+    secure?: boolean;
+  };
 }
 
 /** The service keys the wizard/settings can configure, in display order. */
@@ -94,6 +102,7 @@ export function saveConfig(patch: RuntimeConfig): RuntimeConfig {
   if (typeof patch.allowSignup === 'boolean') merged.allowSignup = patch.allowSignup;
   if (typeof patch.defaultCacheTtlSec === 'number') merged.defaultCacheTtlSec = patch.defaultCacheTtlSec;
   if (typeof patch.maxCacheTtlSec === 'number') merged.maxCacheTtlSec = patch.maxCacheTtlSec;
+  if (patch.smtp) merged.smtp = { ...(current.smtp || {}), ...patch.smtp };
   mkdirSync(dirname(CONFIG_FILE), { recursive: true });
   writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 });
   cache = merged;
@@ -111,6 +120,11 @@ export function isSetupComplete(): boolean {
 /** Admin's persisted sign-up policy, or undefined if never set (use env/default). */
 export function getAllowSignup(): boolean | undefined {
   return loadConfig().allowSignup;
+}
+
+/** Admin-configured SMTP settings (never includes the password). */
+export function getSmtpConfig(): NonNullable<RuntimeConfig['smtp']> {
+  return loadConfig().smtp || {};
 }
 
 /** Admin's persisted default result-cache TTL (seconds), or undefined if unset. */

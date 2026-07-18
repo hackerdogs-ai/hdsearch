@@ -24,6 +24,11 @@ function hasLongSequence(s: string): boolean {
   return false;
 }
 
+/** Shown under an empty password field, and reused by the reset-password form. */
+export const PASSWORD_HINT =
+  `At least ${MIN_LENGTH} characters. A ${PASSPHRASE_LENGTH}+ character passphrase needs nothing else; ` +
+  `shorter ones need 3 of: lowercase, uppercase, number, symbol.`;
+
 /** Mirrors the server policy in api/src/password.ts so errors surface before submit. */
 export function checkPassword(pw: string, identifier?: string): string | null {
   if (pw.length < MIN_LENGTH) return `Password must be at least ${MIN_LENGTH} characters.`;
@@ -55,16 +60,22 @@ export function checkPassword(pw: string, identifier?: string): string | null {
 export function AuthCard({
   firstRun,
   openSignup,
+  emailEnabled = false,
   error,
 }: {
   firstRun: boolean;
   openSignup: boolean;
+  /** SMTP configured → offer password reset and magic-link sign-in. */
+  emailEnabled?: boolean;
   error?: string | null;
 }) {
   // Sign-up view when it's first-run (create admin) or the user toggled to register.
   const [signup, setSignup] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
   const [pw, setPw] = useState('');
+  const [magic, setMagic] = useState(false);
+  const [magicSent, setMagicSent] = useState(false);
+  const [magicBusy, setMagicBusy] = useState(false);
   const isRegister = firstRun || signup;
 
   const title = firstRun ? 'Create your admin account' : signup ? 'Create your account' : 'Sign in to hdsearch';
@@ -92,6 +103,73 @@ export function AuthCard({
       return;
     }
     setClientError(null);
+  }
+
+  async function sendMagicLink(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const email = (new FormData(e.currentTarget).get('email') as string) || '';
+    setMagicBusy(true);
+    setClientError(null);
+    try {
+      const r = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'magic', email }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Could not send a sign-in link.');
+      setMagicSent(true);
+    } catch (err) {
+      setClientError((err as Error).message);
+    } finally {
+      setMagicBusy(false);
+    }
+  }
+
+  // Magic-link view: ask for an email, then confirm it was (maybe) sent.
+  if (magic) {
+    return (
+      <div className="card w-full max-w-sm p-8">
+        {magicSent ? (
+          <div className="text-center">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-green-100 text-2xl text-green-700">✓</div>
+            <h1 className="text-xl font-bold text-ink-900">Check your email</h1>
+            <p className="mt-2 text-sm text-ink-500">
+              If that address is registered, a sign-in link is on its way. It expires in 15 minutes and can be used once.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setMagic(false); setMagicSent(false); }}
+              className="btn-ghost mt-6 text-sm"
+            >
+              ← Back to sign-in
+            </button>
+          </div>
+        ) : (
+          <>
+            <h1 className="text-center text-xl font-bold text-ink-900">Email me a sign-in link</h1>
+            <p className="mt-1 text-center text-sm text-ink-500">No password needed — we&apos;ll send a one-time link.</p>
+            {clientError && (
+              <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-center text-sm text-red-700">{clientError}</p>
+            )}
+            <form onSubmit={sendMagicLink} className="mt-6 space-y-3">
+              <div>
+                <label className="label">Email</label>
+                <input name="email" type="email" required placeholder="you@example.com" className="input" autoComplete="email" />
+              </div>
+              <button type="submit" disabled={magicBusy} className="btn-primary w-full disabled:opacity-50">
+                {magicBusy ? 'Sending…' : 'Send sign-in link'}
+              </button>
+            </form>
+            <p className="mt-6 text-center text-sm text-ink-500">
+              <button type="button" onClick={() => setMagic(false)} className="font-medium text-brand-600 hover:underline">
+                Use a password instead
+              </button>
+            </p>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -138,7 +216,7 @@ export function AuthCard({
             <p className={`mt-1 text-sm ${pw && checkPassword(pw) ? 'text-ink-500' : 'text-green-600'}`}>
               {pw
                 ? checkPassword(pw) || 'Strong password ✓'
-                : `At least ${MIN_LENGTH} characters. A ${PASSPHRASE_LENGTH}+ character passphrase needs nothing else; shorter ones need 3 of: lowercase, uppercase, number, symbol.`}
+                : PASSWORD_HINT}
             </p>
           )}
         </div>
@@ -161,6 +239,17 @@ export function AuthCard({
           {firstRun ? 'Create admin account' : signup ? 'Create account' : 'Sign in'}
         </button>
       </form>
+
+      {!isRegister && emailEnabled && (
+        <div className="mt-4 space-y-2 text-center text-sm">
+          <button type="button" onClick={() => setMagic(true)} className="font-medium text-brand-600 hover:underline">
+            Email me a sign-in link instead
+          </button>
+          <p>
+            <Link href="/forgot-password" className="text-ink-400 hover:text-ink-700">Forgot your password?</Link>
+          </p>
+        </div>
+      )}
 
       {/* Toggle between sign-in and sign-up (never during first-run admin setup) */}
       {!firstRun && (

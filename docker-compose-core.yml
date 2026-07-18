@@ -55,6 +55,15 @@ services:
       # Self-registration open by default (Databasus model); an admin can switch
       # to invite-only in System Admin. Set =false here to lock it at deploy time.
       - HDSEARCH_OPEN_SIGNUP=${HDSEARCH_OPEN_SIGNUP:-true}
+      # Optional email (password reset + magic-link sign-in). Unset = feature off.
+      # An admin can instead configure SMTP in System Admin -> Email (encrypted).
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - HDSEARCH_APP_BASE_URL=${HDSEARCH_APP_BASE_URL:-http://localhost:3000}
     ports:
       - "${API_PORT:-8791}:8791"   # REST API
       - "${MCP_PORT:-8792}:8792"   # MCP (Streamable HTTP)

@@ -7,7 +7,7 @@
 #   docker compose -f docker-compose-infra.yml up -d
 #
 # Container name : port (on hdsearchnet) that core points at by default:
-#   hds-db          5432   Postgres/TimescaleDB
+#   hds-db          5432   Postgres/TimescaleDB (host :5433)
 #   hds-redis       6379   Redis Stack (RediSearch)
 #   hds-seaweedfs   8333   SeaweedFS S3
 #   hds-embeddings  8080   MiniLM embeddings
@@ -29,6 +29,8 @@ services:
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
       PGDATA: /var/lib/postgresql/data/pg_data
     command: ["postgres", "-c", "max_connections=200"]
+    ports:
+      - "5433:5432"
     volumes:
       - hds-postgres-data:/var/lib/postgresql/data
     networks: [hdsearchnet]

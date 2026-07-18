@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { api, ApiError } from '@/lib/api';
 import { SystemDefaultKeys } from '@/components/system-default-keys';
 import { SignupPolicy } from '@/components/signup-policy';
+import { EmailSettings } from '@/components/email-settings';
 import { CacheTtlPolicy } from '@/components/cache-ttl-policy';
 import { ProviderRegistryManager } from '@/components/provider-registry-manager';
 import { ModelRegistryManager } from '@/components/model-registry-manager';
@@ -40,6 +41,8 @@ export default async function AdminPage() {
       </div>
 
       <SignupPolicy />
+
+      <EmailSettings />
 
       <CacheTtlPolicy />
 

@@ -155,6 +155,9 @@ export const api = {
   adminDeleteModel: (id: string) => apiCall(`/v1/admin/llm-models/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   adminGetSignup: () => apiCall('/v1/admin/signup'),
   adminSetSignup: (allow: boolean) => apiCall('/v1/admin/signup', { body: { allow }, method: 'PUT' }),
+  adminGetEmail: () => apiCall('/v1/admin/email'),
+  adminSetEmail: (body: Record<string, unknown>) => apiCall('/v1/admin/email', { body, method: 'PUT' }),
+  adminTestEmail: (to?: string) => apiCall('/v1/admin/email/test', { body: to ? { to } : {}, method: 'POST' }),
   adminGetCacheTtl: () => apiCall('/v1/admin/cache-ttl'),
   adminSetCacheTtl: (body: { defaultSec: number; maxSec: number }) =>
     apiCall('/v1/admin/cache-ttl', { body, method: 'PUT' }),

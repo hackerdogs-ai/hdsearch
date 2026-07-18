@@ -185,6 +185,22 @@ CREATE TABLE IF NOT EXISTS hd_search.llm_models (
 );
 CREATE INDEX IF NOT EXISTS llm_models_provider_idx ON hd_search.llm_models (provider_id);
 
+-- ---------------------------------------------------------------------------
+-- Single-use auth tokens: password reset + magic-link sign-in.
+-- Only the SHA-256 of the token is stored, so a database leak cannot be replayed
+-- to take over an account. Rows are consumed atomically (see auth-tokens.ts).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS hd_search.auth_tokens (
+  token_hash  TEXT PRIMARY KEY,                    -- sha256(raw token), hex
+  user_id     TEXT NOT NULL REFERENCES hd_search.users(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,                       -- 'reset' | 'magic'
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON hd_search.auth_tokens (user_id, kind);
+CREATE INDEX IF NOT EXISTS auth_tokens_expires_idx ON hd_search.auth_tokens (expires_at);
+
 -- Backfill: add source column to llm_providers if missing (added after initial table creation)
 ALTER TABLE hd_search.llm_providers ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'json';
 -- Backfill: OpenAI-compatible base URL for admin-added providers (NULL for built-ins,

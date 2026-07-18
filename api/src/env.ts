@@ -230,6 +230,8 @@ export const env = {
   // openSignup is on. adminEmail/adminPassword bootstrap the admin headlessly (Docker).
   openSignup: /^(1|true|yes|on)$/i.test(e.HDSEARCH_OPEN_SIGNUP || ''),
   adminEmail: (e.HDSEARCH_ADMIN_EMAIL || e.ADMIN_EMAIL || '').trim(),
+  // Public URL of the web app — used to build password-reset / sign-in links in email.
+  appBaseUrl: (e.HDSEARCH_APP_BASE_URL || e.APP_BASE_URL || 'http://localhost:3000').replace(/\/+$/, ''),
   adminPassword: e.HDSEARCH_ADMIN_PASSWORD || e.ADMIN_PASSWORD || '',
 
   // ---- central auth (hackerdogs-core) integration ----
