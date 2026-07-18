@@ -1,5 +1,5 @@
 // System Administration endpoints — super-user only. Manages default provider
-// keys (per plan tier), system config, and the LLM provider registry.
+// keys, system config, and the LLM provider/model registry.
 // Gated by the admin:platform scope.
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ import {
   getAdminCacheTtlLimits,
 } from '../cache-ttl.js';
 import { listDefaultKeys, upsertDefaultKey, deleteDefaultKey } from '../ai/default-keys.js';
-import { getProviderMeta, getPlanAccess, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
+import { getProviderMeta, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
 import { upsertModel, deleteModel, loadAllModelsForAdmin } from '../ai/model-registry-db.js';
 import { log, errFields } from '../logger.js';
 
@@ -29,12 +29,11 @@ adminRoutes.get('/default-keys', async (c) => {
 const DefaultKeySchema = z.object({
   provider: z.string().min(1).max(64),
   field: z.string().min(1).max(64),
-  planId: z.enum(['free', 'dev', 'devtest', 'production', 'enterprise']),
   secret: z.string().min(1).max(4096),
   label: z.string().max(200).optional(),
 });
 
-// PUT /v1/admin/default-keys — upsert a default key for a provider+plan
+// PUT /v1/admin/default-keys — upsert the default key for a provider field
 adminRoutes.put('/default-keys', async (c) => {
   if (!encryptionAvailable()) return c.json({ error: 'unavailable', message: 'HDSEARCH_ENCRYPTION_KEY not configured' }, 503);
   const parsed = DefaultKeySchema.safeParse(await c.req.json().catch(() => null));
@@ -44,12 +43,11 @@ adminRoutes.put('/default-keys', async (c) => {
     const meta = await upsertDefaultKey(
       parsed.data.provider.toLowerCase(),
       parsed.data.field.toLowerCase(),
-      parsed.data.planId,
       parsed.data.secret,
       parsed.data.label || null,
       p.userId,
     );
-    log.info('admin: upsert default key', { provider: parsed.data.provider, plan: parsed.data.planId, admin: p.userId });
+    log.info('admin: upsert default key', { provider: parsed.data.provider, field: parsed.data.field, admin: p.userId });
     return c.json({ saved: meta });
   } catch (e) {
     log.error('admin: store default key failed', errFields(e));
@@ -59,7 +57,6 @@ adminRoutes.put('/default-keys', async (c) => {
 
 const DeleteKeySchema = z.object({
   field: z.string().min(1).max(64),
-  planId: z.enum(['free', 'dev', 'devtest', 'production', 'enterprise']),
 });
 
 // DELETE /v1/admin/default-keys — remove a default key
@@ -67,9 +64,9 @@ adminRoutes.delete('/default-keys', async (c) => {
   const parsed = DeleteKeySchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
   const p = c.get('principal');
-  const ok = await deleteDefaultKey(parsed.data.field.toLowerCase(), parsed.data.planId);
+  const ok = await deleteDefaultKey(parsed.data.field.toLowerCase());
   if (ok) {
-    log.info('admin: delete default key', { field: parsed.data.field, plan: parsed.data.planId, admin: p.userId });
+    log.info('admin: delete default key', { field: parsed.data.field, admin: p.userId });
     return c.json({ deleted: true });
   }
   return c.json({ error: 'not_found' }, 404);
@@ -123,7 +120,7 @@ adminRoutes.put('/cache-ttl', async (c) => {
 
 // GET /v1/admin/llm-providers — registry metadata (no secrets)
 adminRoutes.get('/llm-providers', async (_c) => {
-  return _c.json({ providers: getProviderMeta(), planAccess: getPlanAccess() });
+  return _c.json({ providers: getProviderMeta() });
 });
 
 // GET /v1/admin/llm-models — list all models (includes disabled + source tag)
@@ -152,7 +149,6 @@ const ModelSchema = z.object({
   }).default({}),
   defaultRank: z.number().int().default(100),
   enabled: z.boolean().default(true),
-  plans: z.array(z.string()).default([]),
 });
 
 // POST /v1/admin/llm-models — create or update a model (source='admin')
@@ -161,7 +157,7 @@ adminRoutes.post('/llm-models', async (c) => {
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
   const p = c.get('principal');
   try {
-    await upsertModel({ ...parsed.data, adminUserId: p.userId });
+    await upsertModel({ ...parsed.data, plans: [], adminUserId: p.userId });
     invalidateDbCache();
     await refreshFromDb();
     log.info('admin: upsert model', { model: parsed.data.id, provider: parsed.data.providerId, admin: p.userId });

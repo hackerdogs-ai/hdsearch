@@ -1,6 +1,6 @@
 // Server-side BFF client for the hd-search API. Every call is authenticated as
 // the logged-in user via the trusted internal headers (X-HD-Internal + X-HD-User),
-// so the browser never sees an API key and all quota/rate-limit/key resolution
+// so the browser never sees an API key and all rate-limit/key resolution
 // happens server-side exactly as for external API-key callers.
 import 'server-only';
 import { cache } from 'react';
@@ -130,7 +130,6 @@ export const api = {
     }),
   history: (limit = 50, offset = 0) => apiCall(`/v1/account/history?limit=${limit}&offset=${offset}`),
   dashboard: (days = 30) => apiCall(`/v1/account/dashboard?days=${days}`),
-  plans: () => apiCall('/v1/account/plans'),
   apiKeys: () => apiCall('/v1/keys/api'),
   createApiKey: (body: Record<string, unknown>) => apiCall('/v1/keys/api', { body, method: 'POST' }),
   revokeApiKey: (id: string) => apiCall(`/v1/keys/api/${id}`, { method: 'DELETE' }),
@@ -139,15 +138,10 @@ export const api = {
   deleteProviderKey: (field: string) => apiCall(`/v1/keys/providers/${field}`, { method: 'DELETE' }),
   upsertProfile: (user: SessionUser) =>
     apiCall('/v1/account/profile', { method: 'PUT', user, body: { email: user.email, name: user.name, picture: user.picture } }),
-  credits: () => apiCall('/v1/account/credits'),
-  creditConsumption: (days = 30, limit = 500, offset = 0) =>
-    apiCall(`/v1/account/credits/consumption?days=${days}&limit=${limit}&offset=${offset}`),
-  creditStats: (days = 30) => apiCall(`/v1/account/credits/stats?days=${days}`),
   providerPrefs: () => apiCall('/v1/engines/prefs'),
   saveProviderPrefs: (prefs: { disabled?: string[]; ranks?: Record<string, number>; cacheTtlSec?: number }) =>
     apiCall('/v1/engines/prefs', { method: 'PUT', body: prefs }),
   aiProviders: () => apiCall('/v1/ai/providers'),
-  // Billing is owned by hackerdogs-core; hd-search only links out to the core portal.
 
   // Admin endpoints (super-user only)
   adminDefaultKeys: () => apiCall('/v1/admin/default-keys'),

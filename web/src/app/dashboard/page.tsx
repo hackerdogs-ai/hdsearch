@@ -4,9 +4,8 @@ import { api, ApiError, rethrowIfRedirect } from '@/lib/api';
 export const dynamic = 'force-dynamic';
 
 interface AccountResp {
-  profile: { plan?: string; email?: string };
-  plan: { id: string; label: string; quota: number | null; vector: boolean };
-  usage: { search: number; crawl: number; vector: number; total: number; quota: number | null };
+  profile: { email?: string };
+  usage: { search: number; crawl: number; vector: number; total: number };
 }
 
 async function load() {

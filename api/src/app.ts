@@ -19,7 +19,6 @@ import { accountRoutes } from './routes/account.js';
 import { adminRoutes } from './routes/admin.js';
 import { openaiRoutes } from './routes/openai-compat.js';
 import { trendsRoutes } from './routes/trends.js';
-import { plansRoutes } from './routes/plans.js';
 import { authLocalRoutes } from './routes/auth-local.js';
 import { setupRoutes } from './routes/setup.js';
 // Billing is retired — no plans/credits/quotas in the open-source build (see docs/OPEN_SOURCE_MIGRATION.md).
@@ -73,7 +72,6 @@ export function buildApp(): Hono {
   app.route('/v1/admin', adminRoutes);
   app.route('/v1/openai', openaiRoutes);
   app.route('/v1/trends', trendsRoutes);
-  app.route('/v1/plans', plansRoutes);
   app.route('/v1/auth', authLocalRoutes);
   app.route('/v1/setup', setupRoutes);
 

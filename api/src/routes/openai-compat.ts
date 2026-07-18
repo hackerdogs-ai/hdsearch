@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../auth.js';
-import { listModelsForPlan, getModel, defaultModelForPlan, refreshDynamicModels, refreshFromDb } from '../ai/models.js';
+import { listModels, getModel, defaultModel, refreshDynamicModels, refreshFromDb } from '../ai/models.js';
 import { AUTO_SELECT_ENABLED, selectModels, rankExplicit, type SelectContext } from '../ai/model-selector.js';
 import { runAiChat } from '../ai/orchestrator.js';
 import { getProvider } from '../ai/providers/index.js';
@@ -13,7 +13,6 @@ import { statsFor } from '../ai/health.js';
 import { getProviderPrefs, userLlmRankOrder } from '../provider-prefs.js';
 import type { LlmModel } from '../ai/models.js';
 import { log, errFields } from '../logger.js';
-import { chargeUserCredits } from '../charge-credits.js';
 
 export const openaiRoutes = new Hono();
 
@@ -37,15 +36,15 @@ function genId(): string {
   return `chatcmpl-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function availabilityMap(models: LlmModel[], userId?: string, planId?: string): Promise<Map<string, boolean>> {
+async function availabilityMap(models: LlmModel[], userId?: string): Promise<Map<string, boolean>> {
   const byProvider = new Map<string, Promise<boolean>>();
   const out = new Map<string, boolean>();
   await Promise.all(
     models.map(async (m) => {
       const provider = getProvider(m.provider);
       if (!provider) { out.set(m.id, false); return; }
-      const pk = `${m.provider}::${planId || ''}`;
-      if (!byProvider.has(pk)) byProvider.set(pk, provider.available(m, userId, planId).catch(() => false));
+      const pk = m.provider;
+      if (!byProvider.has(pk)) byProvider.set(pk, provider.available(m, userId).catch(() => false));
       out.set(m.id, await byProvider.get(pk)!);
     }),
   );
@@ -57,7 +56,7 @@ openaiRoutes.get('/models', requireScope('search:read'), async (c) => {
   const p = c.get('principal');
   await Promise.all([refreshFromDb(), refreshDynamicModels()]);
   const prefs = await getProviderPrefs(p.userId);
-  const models = listModelsForPlan(p.plan).filter((m) => !prefs.disabled.includes(m.id));
+  const models = listModels().filter((m) => !prefs.disabled.includes(m.id));
   return c.json({
     object: 'list',
     data: models.map((m) => ({
@@ -80,8 +79,8 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
 
   await refreshDynamicModels();
   const prefs = await getProviderPrefs(p.userId);
-  const models = listModelsForPlan(p.plan).filter((m) => !prefs.disabled.includes(m.id));
-  const avail = await availabilityMap(models, p.userId, p.plan);
+  const models = listModels().filter((m) => !prefs.disabled.includes(m.id));
+  const avail = await availabilityMap(models, p.userId);
 
   // Resolve model — system messages become part of the prompt, user/assistant passed through
   let model = body.model ? getModel(body.model) : undefined;
@@ -111,7 +110,7 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
       fallbacks = ranked.slice(1);
     }
   }
-  if (!model) model = defaultModelForPlan(p.plan);
+  if (!model) model = defaultModel();
   if (!fallbacks.length) {
     fallbacks = models.filter((m) => m.id !== model!.id && (avail.get(m.id) ?? false)).sort((a, b) => a.defaultRank - b.defaultRank);
   }
@@ -137,7 +136,7 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
       let sentRole = false;
 
       try {
-        for await (const ev of runAiChat({ model: model!, fallbacks, messages: chatMessages, userId: p.userId, planId: p.plan })) {
+        for await (const ev of runAiChat({ model: model!, fallbacks, messages: chatMessages, userId: p.userId })) {
           if (ev.type === 'text') {
             finalText += ev.delta;
             const chunk: any = {
@@ -168,14 +167,6 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
             };
             await stream.writeSSE({ data: JSON.stringify(finalChunk) });
             await stream.writeSSE({ data: '[DONE]' });
-
-            chargeUserCredits(p, {
-              sessionId: `hds:openai:${p.userId}`,
-              taskId: `openai:${model!.id}:${Date.now()}`,
-              credits: ev.credits,
-              costUsd: ev.credits / 100,
-              minimum: 1,
-            });
           } else if (ev.type === 'error') {
             const errChunk = {
               error: { message: ev.message, type: 'server_error', param: null, code: null },
@@ -199,20 +190,13 @@ openaiRoutes.post('/chat/completions', requireScope('search:read'), async (c) =>
   let finishReason = 'stop';
 
   try {
-    for await (const ev of runAiChat({ model: model!, fallbacks, messages: chatMessages, userId: p.userId, planId: p.plan })) {
+    for await (const ev of runAiChat({ model: model!, fallbacks, messages: chatMessages, userId: p.userId })) {
       if (ev.type === 'text') finalText += ev.delta;
       else if (ev.type === 'usage') {
         inputTokens = ev.inputTokens;
         outputTokens = ev.outputTokens;
       } else if (ev.type === 'done') {
         finishReason = ev.stopReason === 'end_turn' ? 'stop' : ev.stopReason;
-        chargeUserCredits(p, {
-          sessionId: `hds:openai:${p.userId}`,
-          taskId: `openai:${model!.id}:${Date.now()}`,
-          credits: ev.credits,
-          costUsd: ev.credits / 100,
-          minimum: 1,
-        });
       }
     }
   } catch (e) {

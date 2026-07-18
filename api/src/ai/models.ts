@@ -153,11 +153,6 @@ export function listModels(): LlmModel[] {
   return [...STATIC, ...DYNAMIC].filter((x) => x.enabled).sort((a, b) => a.defaultRank - b.defaultRank);
 }
 
-/** All enabled models are listed for every plan (ranking UI + model picker). */
-export function listModelsForPlan(_planId: string): LlmModel[] {
-  return listModels();
-}
-
 export function getModel(id: string): LlmModel | undefined {
   return BY_ID.get(id);
 }
@@ -166,26 +161,12 @@ export function defaultModel(): LlmModel {
   return BY_ID.get(DEFAULT_MODEL_ID) ?? listModels()[0]!;
 }
 
-export function defaultModelForPlan(planId: string): LlmModel {
-  const pa = registry.planAccess[planId];
-  if (pa?.defaultModel) {
-    const m = BY_ID.get(pa.defaultModel);
-    if (m) return m;
-  }
-  const available = listModelsForPlan(planId);
-  return available[0] ?? defaultModel();
-}
-
 export function getProviderMeta(): LlmProviderMeta[] {
   return PROVIDER_META;
 }
 
 export function getProviderMetaById(id: string): LlmProviderMeta | undefined {
   return PROVIDER_META.find((p) => p.id === id);
-}
-
-export function getPlanAccess(): Record<string, PlanAccessEntry> {
-  return registry.planAccess;
 }
 
 export { invalidateDbCache } from './model-registry-db.js';

@@ -46,7 +46,6 @@ export interface SystemKeyMeta {
   id: number;
   provider: string;
   field: string;
-  planId: string;
   masked: string;
   label: string | null;
   status: string;
@@ -59,15 +58,14 @@ export async function listDefaultKeys(): Promise<SystemKeyMeta[]> {
     id: number;
     provider: string;
     field: string;
-    plan_id: string;
     secret_enc: string;
     label: string | null;
     status: string;
     created_by: string;
     updated_at: string;
   }>(
-    `select id, provider, field, plan_id, secret_enc, label, status, created_by, updated_at
-     from ${SCHEMA}.system_provider_keys order by provider, field, plan_id`,
+    `select id, provider, field, secret_enc, label, status, created_by, updated_at
+     from ${SCHEMA}.system_provider_keys order by provider, field`,
     [],
   );
   return rows.map((r) => {
@@ -79,7 +77,6 @@ export async function listDefaultKeys(): Promise<SystemKeyMeta[]> {
       id: r.id,
       provider: r.provider,
       field: r.field,
-      planId: r.plan_id,
       masked,
       label: r.label,
       status: r.status,
@@ -92,31 +89,32 @@ export async function listDefaultKeys(): Promise<SystemKeyMeta[]> {
 export async function upsertDefaultKey(
   provider: string,
   field: string,
-  planId: string,
   secret: string,
   label: string | null,
   adminUserId: string,
 ): Promise<SystemKeyMeta> {
   const enc = encryptSecret(secret);
+  // One system key per provider field (no plan tiers). plan_id is pinned to 'all'
+  // for schema compatibility; any legacy per-tier rows for this field are dropped.
+  await query(`delete from ${SCHEMA}.system_provider_keys where field = $1 and plan_id <> 'all'`, [field]);
   const rows = await query<{
     id: number;
     updated_at: string;
   }>(
     `insert into ${SCHEMA}.system_provider_keys (provider, field, plan_id, secret_enc, label, status, created_by, updated_at)
-     values ($1,$2,$3,$4,$5,'active',$6, now())
+     values ($1,$2,'all',$3,$4,'active',$5, now())
      on conflict (field, plan_id) do update
        set secret_enc = excluded.secret_enc, provider = excluded.provider,
            label = excluded.label, status = 'active',
            created_by = excluded.created_by, updated_at = now()
      returning id, updated_at`,
-    [provider, field, planId, enc, label, adminUserId],
+    [provider, field, enc, label, adminUserId],
   );
   cache.delete(ck(field));
   return {
     id: rows[0]!.id,
     provider,
     field,
-    planId,
     masked: maskSecret(secret),
     label,
     status: 'active',
@@ -125,10 +123,10 @@ export async function upsertDefaultKey(
   };
 }
 
-export async function deleteDefaultKey(field: string, planId: string): Promise<boolean> {
+export async function deleteDefaultKey(field: string): Promise<boolean> {
   const rows = await query<{ field: string }>(
-    `delete from ${SCHEMA}.system_provider_keys where field = $1 and plan_id = $2 returning field`,
-    [field, planId],
+    `delete from ${SCHEMA}.system_provider_keys where field = $1 returning field`,
+    [field],
   );
   cache.delete(ck(field));
   return rows.length > 0;

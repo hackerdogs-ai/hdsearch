@@ -4,12 +4,9 @@ import { Hono } from 'hono';
 import { requireAuth, requireScope } from '../auth.js';
 import { CrawlRequestSchema } from '../types.js';
 import { runCrawl } from '../engine.js';
-import { checkQuota } from '../plans.js';
 import { recordUsage, recordError } from '../metrics.js';
 import { archiveCrawl } from '../storage.js';
 import { log, errFields } from '../logger.js';
-import { queryCredits } from '../credit-costs.js';
-import { chargeUserCredits } from '../charge-credits.js';
 
 export const crawlRoutes = new Hono();
 
@@ -20,9 +17,6 @@ crawlRoutes.post('/', requireScope('crawl:read'), async (c) => {
   const parsed = CrawlRequestSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
 
-  const quota = await checkQuota(p.userId, p.plan, 'crawl');
-  if (!quota.allowed) return c.json({ error: 'quota_exceeded', message: quota.reason, used: quota.used, quota: quota.quota }, 402);
-
   try {
     const resp = await runCrawl(parsed.data, p.userId);
     if (resp.result && parsed.data.store) {
@@ -32,7 +26,6 @@ crawlRoutes.post('/', requireScope('crawl:read'), async (c) => {
       });
     }
     const usedEngine = resp.enginesUsed.find((e) => e.ok)?.engine || 'basic';
-    const credits = queryCredits([usedEngine], 'crawl', resp.cached);
     void recordUsage({
       userId: p.userId,
       kind: 'crawl',
@@ -44,13 +37,8 @@ crawlRoutes.post('/', requireScope('crawl:read'), async (c) => {
       tookMs: resp.tookMs,
       apiKeyId: p.keyId,
     });
-    chargeUserCredits(p, {
-      sessionId: `hds:crawl:${p.userId}`,
-      taskId: `crawl:${Date.now()}`,
-      credits,
-    });
     if (!resp.result) return c.json({ error: 'crawl_failed', message: 'no crawler returned content', enginesUsed: resp.enginesUsed }, 502);
-    return c.json({ ...resp, credits });
+    return c.json(resp);
   } catch (e) {
     log.error('crawl failed', errFields(e));
     void recordError(p.userId, parsed.data.engine, (e as Error).message);
@@ -71,12 +59,8 @@ crawlRoutes.get('/', requireScope('crawl:read'), async (c) => {
     ttl: c.req.query('ttl') ? Number(c.req.query('ttl')) : undefined,
   });
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
-  const quota = await checkQuota(p.userId, p.plan, 'crawl');
-  if (!quota.allowed) return c.json({ error: 'quota_exceeded', message: quota.reason }, 402);
-
   const resp = await runCrawl(parsed.data, p.userId);
   const usedEngine = resp.enginesUsed.find((e) => e.ok)?.engine || 'basic';
-  const credits = queryCredits([usedEngine], 'crawl', resp.cached);
   void recordUsage({
     userId: p.userId,
     kind: 'crawl',
@@ -88,11 +72,6 @@ crawlRoutes.get('/', requireScope('crawl:read'), async (c) => {
     tookMs: resp.tookMs,
     apiKeyId: p.keyId,
   });
-  chargeUserCredits(p, {
-    sessionId: `hds:crawl:${p.userId}`,
-    taskId: `crawl:${Date.now()}`,
-    credits,
-  });
   if (!resp.result) return c.json({ error: 'crawl_failed', enginesUsed: resp.enginesUsed }, 502);
-  return c.json({ ...resp, credits });
+  return c.json(resp);
 });

@@ -25,11 +25,10 @@ function cacheKey(userId: string | undefined, field: string): string {
   return `${userId || '_dev'}::${field}`;
 }
 
-/** Resolve a credential: per-user encrypted key → plan default key → dev .env fallback. */
+/** Resolve a credential: per-user encrypted key → system default key → dev .env fallback. */
 export async function resolveKey(
   userId: string | undefined,
   field: string,
-  planId?: string,
 ): Promise<string | undefined> {
   const ck = cacheKey(userId, field);
   const hit = cache.get(ck);
@@ -66,23 +65,22 @@ export async function resolveKey(
   return value;
 }
 
-/** Build a per-request ProviderContext bound to a user and their plan. */
-export function contextFor(userId?: string, planId?: string): ProviderContext {
+/** Build a per-request ProviderContext bound to a user. */
+export function contextFor(userId?: string): ProviderContext {
   return {
     userId,
-    getKey: (field: string) => resolveKey(userId, field, planId),
+    getKey: (field: string) => resolveKey(userId, field),
   };
 }
 
-/** Has this user (or plan default or dev fallback) got every key a provider needs? */
+/** Has this user (or the system default or dev fallback) got every key a provider needs? */
 export async function hasKeysFor(
   userId: string | undefined,
   requiresKeys: string[] | undefined,
-  planId?: string,
 ): Promise<boolean> {
   if (!requiresKeys || requiresKeys.length === 0) return true;
   for (const field of requiresKeys) {
-    const v = await resolveKey(userId, field, planId);
+    const v = await resolveKey(userId, field);
     if (!v) return false;
   }
   return true;

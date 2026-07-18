@@ -8,11 +8,11 @@ import type { LlmModel } from '../models.js';
 import type { LlmProvider, TurnArgs, TurnResult, StreamDelta, NeutralMsg, ToolCall } from './types.js';
 
 /** Resolve the Anthropic API key: env → per-user key → plan default → dev .env. */
-export async function anthropicKey(userId?: string, planId?: string): Promise<string | undefined> {
+export async function anthropicKey(userId?: string): Promise<string | undefined> {
   return (
     process.env.HDSEARCH_ANTHROPIC_KEY ||
     process.env.ANTHROPIC_API_KEY ||
-    (await resolveKey(userId, 'anthropic', planId)) ||
+    (await resolveKey(userId, 'anthropic')) ||
     undefined
   );
 }
@@ -63,12 +63,12 @@ function toAnthropic(messages: NeutralMsg[]): any[] {
 export const anthropicProvider: LlmProvider = {
   id: 'anthropic',
 
-  async available(_model: LlmModel, userId?: string, planId?: string): Promise<boolean> {
-    return !!(await anthropicKey(userId, planId));
+  async available(_model: LlmModel, userId?: string): Promise<boolean> {
+    return !!(await anthropicKey(userId));
   },
 
   async *streamTurn(args: TurnArgs): AsyncGenerator<StreamDelta, TurnResult, void> {
-    const key = await anthropicKey(args.userId, args.planId);
+    const key = await anthropicKey(args.userId);
     if (!key) throw new Error('no-anthropic-key');
     const client = new Anthropic({ apiKey: key });
 

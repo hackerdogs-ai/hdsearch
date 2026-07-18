@@ -5,15 +5,13 @@
 //      user via `X-HD-User` plus a shared `X-HD-Internal` secret so the panel can
 //      act on the logged-in user's behalf without minting an API key.
 //
-// On success we attach { userId, scopes, plan, keyId } to the context.
+// On success we attach { userId, scopes, role, keyId } to the context.
 import type { Context, Next } from 'hono';
 import { env } from './env.js';
 import { verifyKey, touchKey, type Scope } from './apikeys.js';
 import { rateLimit } from './ratelimit.js';
-import { planOf } from './plans.js';
 import { SCHEMA, tryQuery } from './db.js';
-import { verifyCoreJwt, corePlanSku } from './coreClient.js';
-import { skuToPlanId } from './entitlements.js';
+import { verifyCoreJwt } from './coreClient.js';
 import { rolesToHd, type HdRole } from './roles.js';
 
 // Full first-party scope set granted to a signed-in user (web BFF / legacy header path).
@@ -22,10 +20,9 @@ const USER_SCOPES: Scope[] = ['search:read', 'crawl:read', 'vector:read', 'admin
 export interface Principal {
   userId: string;
   scopes: Scope[];
-  plan: string;
   role?: HdRole; // 'admin' (core super/tenant-admin) | 'user'
   keyId?: string;
-  coreJwt?: string; // the raw core JWT, needed for central credit deduction
+  coreJwt?: string; // the raw core JWT, when central auth is enabled
   rateLimitPerMin: number;
 }
 
@@ -37,10 +34,8 @@ declare module 'hono' {
 
 const INTERNAL_SECRET = env.internalSecret;
 
-// Shared identities used for ANONYMOUS (not-signed-in) home/search browsing. They
-// are exempt from the monthly plan quota so the public demo never hits a per-user
-// cap (abuse is still bounded by the per-id rate limit). Real signed-in users get
-// their own plan quota. Configurable via HDSEARCH_DEMO_USERS.
+// Shared identities used for ANONYMOUS (not-signed-in) home/search browsing.
+// Abuse is bounded by the per-id rate limit. Configurable via HDSEARCH_DEMO_USERS.
 const DEMO_USERS = new Set(
   (process.env.HDSEARCH_DEMO_USERS || 'public-demo').split(',').map((s) => s.trim()).filter(Boolean),
 );
@@ -50,12 +45,6 @@ const DEMO_RATE_LIMIT = Number(process.env.HDSEARCH_DEMO_RATE_LIMIT) || 6000;
 /** Is this the shared anonymous demo identity (vs a real signed-in user)? */
 export function isDemoUser(userId: string): boolean {
   return DEMO_USERS.has(userId);
-}
-
-export async function planForUser(userId: string): Promise<string> {
-  if (DEMO_USERS.has(userId)) return 'enterprise'; // unlimited quota for the public demo
-  const rows = await tryQuery<{ plan: string }>(`select plan from ${SCHEMA}.users where id=$1`, [userId]);
-  return rows[0]?.plan || 'free';
 }
 
 /** Local-auth role lookup: the DB `role` column is the source of truth for admin
@@ -74,7 +63,6 @@ export function requireAuth() {
     const internal = c.req.header('x-hd-internal');
     const hdUser = c.req.header('x-hd-user');
     if (env.authMode !== 'core' && INTERNAL_SECRET && internal && internal === INTERNAL_SECRET && hdUser) {
-      const plan = await planForUser(hdUser);
       // The shared anonymous demo identity is rate-limited far more generously than
       // a single signed-in user, since one bucket is shared across all visitors.
       const isDemo = DEMO_USERS.has(hdUser);
@@ -86,7 +74,6 @@ export function requireAuth() {
       const principal: Principal = {
         userId: hdUser,
         scopes,
-        plan,
         role: dbRole,
         coreJwt: coreJwtHeader || undefined,
         rateLimitPerMin: isDemo ? DEMO_RATE_LIMIT : env.defaultRateLimitPerMin,
@@ -103,14 +90,11 @@ export function requireAuth() {
     if (bearer && !bearer.startsWith('sk-hds-') && (env.authMode === 'core' || env.authMode === 'both')) {
       const claims = await verifyCoreJwt(bearer);
       if (!claims) return c.json({ error: 'unauthorized', message: 'invalid or expired token' }, 401);
-      // RBAC: inherit the user's core role → hd-search scopes. Admins (hd_super/tenant_admin)
-      // get the platform-admin scope and unlimited (enterprise) quota; others get their plan.
-      const { role, scopes, isAdmin } = rolesToHd(claims.roles);
-      const plan = isAdmin ? 'enterprise' : skuToPlanId(await corePlanSku(bearer, claims.sub));
+      // RBAC: inherit the user's core role → hd-search scopes.
+      const { role, scopes } = rolesToHd(claims.roles);
       const principal: Principal = {
         userId: claims.sub,
         scopes,
-        plan,
         role,
         coreJwt: bearer,
         rateLimitPerMin: env.defaultRateLimitPerMin,
@@ -126,11 +110,9 @@ export function requireAuth() {
     if (!rec) return c.json({ error: 'unauthorized', message: 'invalid or revoked API key' }, 401);
 
     void touchKey(rec.id);
-    const plan = await planForUser(rec.userId);
     const principal: Principal = {
       userId: rec.userId,
       scopes: rec.scopes,
-      plan,
       keyId: rec.id,
       rateLimitPerMin: rec.rateLimitPerMin,
     };
@@ -159,4 +141,3 @@ export function requireScope(scope: Scope) {
   };
 }
 
-export { planOf };

@@ -8,7 +8,6 @@ interface DefaultKey {
   id: number;
   provider: string;
   field: string;
-  planId: string;
   masked: string;
   label: string | null;
   status: string;
@@ -28,14 +27,6 @@ const LLM_PROVIDERS = [
   { id: 'mistral', name: 'Mistral AI', field: 'mistral' },
 ];
 
-const PLAN_BADGE: Record<string, string> = {
-  free: 'bg-green-100 text-green-700',
-  dev: 'bg-sky-100 text-sky-700',
-  devtest: 'bg-amber-100 text-amber-700',
-  production: 'bg-purple-100 text-purple-700',
-  enterprise: 'bg-pink-100 text-pink-700',
-};
-
 export function SystemDefaultKeys() {
   const [keys, setKeys] = useState<DefaultKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +35,6 @@ export function SystemDefaultKeys() {
   const [showForm, setShowForm] = useState(false);
 
   const [formProvider, setFormProvider] = useState(LLM_PROVIDERS[0]!.id);
-  // System keys apply to all users (no plan tiers in the open-source build); the
-  // stored plan_id is a fixed bucket kept only for the DB schema.
-  const formPlan = 'free';
   const [formSecret, setFormSecret] = useState('');
   const [formLabel, setFormLabel] = useState('');
 
@@ -81,7 +69,6 @@ export function SystemDefaultKeys() {
         body: JSON.stringify({
           provider: prov.id,
           field: prov.field,
-          planId: formPlan,
           secret: formSecret,
           label: formLabel || undefined,
         }),
@@ -103,14 +90,14 @@ export function SystemDefaultKeys() {
     }
   };
 
-  const handleDelete = async (field: string, planId: string) => {
+  const handleDelete = async (field: string) => {
     if (!confirm(`Delete the default ${field} key?`)) return;
     setSaving(true);
     try {
       const res = await fetch('/api/panel/admin-keys', {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ field, planId }),
+        body: JSON.stringify({ field }),
       });
       if (res.ok) {
         flash('Key deleted', true);
@@ -212,10 +199,7 @@ export function SystemDefaultKeys() {
               </div>
               <div className="divide-y divide-ink-100">
                 {provKeys.map((k) => (
-                  <div key={`${k.field}-${k.planId}`} className="flex items-center gap-3 px-4 py-3">
-                    <span className={`chip py-0.5 text-sm ${PLAN_BADGE[k.planId] || ''}`}>
-                      {k.planId}
-                    </span>
+                  <div key={k.field} className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <code className="text-sm text-ink-500">{k.field}</code>
@@ -231,7 +215,7 @@ export function SystemDefaultKeys() {
                       {k.status}
                     </span>
                     <button
-                      onClick={() => handleDelete(k.field, k.planId)}
+                      onClick={() => handleDelete(k.field)}
                       disabled={saving}
                       className="text-sm text-red-500 hover:text-red-700 hover:underline"
                     >

@@ -57,7 +57,6 @@ export interface TurnArgs {
   messages: NeutralMsg[];
   tools: ToolSpec[];
   userId?: string;
-  planId?: string;
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   maxOutputTokens: number;
 }
@@ -65,7 +64,7 @@ export interface TurnArgs {
 export interface LlmProvider {
   id: string; // 'anthropic' | 'ollama' | …
   /** Can this provider serve a request right now (key present / endpoint reachable)? */
-  available(model: LlmModel, userId?: string, planId?: string): Promise<boolean>;
+  available(model: LlmModel, userId?: string): Promise<boolean>;
   /** Stream one turn: yields deltas, returns the completed TurnResult. */
   streamTurn(args: TurnArgs): AsyncGenerator<StreamDelta, TurnResult, void>;
 }

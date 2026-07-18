@@ -6,13 +6,12 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../auth.js';
-import { listModelsForPlan, getModel, defaultModelForPlan, refreshDynamicModels, refreshFromDb, getProviderMeta } from '../ai/models.js';
+import { listModels, getModel, defaultModel, refreshDynamicModels, refreshFromDb, getProviderMeta } from '../ai/models.js';
 import { runAiChat } from '../ai/orchestrator.js';
 import { getProvider } from '../ai/providers/index.js';
 import type { LlmModel } from '../ai/models.js';
 import { getProviderPrefs } from '../provider-prefs.js';
 import { log, errFields } from '../logger.js';
-import { chargeUserCredits } from '../charge-credits.js';
 import { isDemoUser } from '../auth.js';
 import { recordHistory } from '../history.js';
 import {
@@ -53,7 +52,7 @@ const ChatBody = z.object({
 });
 
 /** Availability per model = its provider can serve it (key present / endpoint reachable). */
-async function availabilityMap(models: LlmModel[], userId?: string, planId?: string): Promise<Map<string, boolean>> {
+async function availabilityMap(models: LlmModel[], userId?: string): Promise<Map<string, boolean>> {
   const byProvider = new Map<string, Promise<boolean>>();
   const out = new Map<string, boolean>();
   await Promise.all(
@@ -63,8 +62,8 @@ async function availabilityMap(models: LlmModel[], userId?: string, planId?: str
         out.set(m.id, false);
         return;
       }
-      const pk = `${m.provider}::${planId || ''}`;
-      if (!byProvider.has(pk)) byProvider.set(pk, provider.available(m, userId, planId).catch(() => false));
+      const pk = m.provider;
+      if (!byProvider.has(pk)) byProvider.set(pk, provider.available(m, userId).catch(() => false));
       out.set(m.id, await byProvider.get(pk)!);
     }),
   );
@@ -76,14 +75,13 @@ aiRoutes.get('/models', requireScope('search:read'), async (c) => {
   await Promise.all([refreshFromDb(), refreshDynamicModels()]);
   const prefs = await getProviderPrefs(p.userId);
   const catalog = c.req.query('catalog') === '1' || c.req.query('catalog') === 'true';
-  const allModels = listModelsForPlan(p.plan);
+  const allModels = listModels();
   const models = catalog ? allModels : allModels.filter((m) => !prefs.disabled.includes(m.id));
-  const avail = await availabilityMap(allModels, p.userId, p.plan);
-  const def = defaultModelForPlan(p.plan);
+  const avail = await availabilityMap(allModels, p.userId);
+  const def = defaultModel();
   const providerNames = new Map(getProviderMeta().map((prov) => [prov.id, prov.name]));
   return c.json({
     default: def.id,
-    plan: p.plan,
     models: models.map((m) => ({
       id: m.id,
       provider: m.provider,
@@ -125,8 +123,8 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
 
   await refreshDynamicModels();
   const chatPrefs = await getProviderPrefs(p.userId);
-  const models = listModelsForPlan(p.plan).filter((m) => !chatPrefs.disabled.includes(m.id));
-  const avail = await availabilityMap(models, p.userId, p.plan);
+  const models = listModels().filter((m) => !chatPrefs.disabled.includes(m.id));
+  const avail = await availabilityMap(models, p.userId);
 
   const model = getModel(body.modelOverride);
   if (!model) {
@@ -148,7 +146,7 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
   const reason = 'pinned by user';
   const fallbacks: LlmModel[] = [];
 
-  log.info('ai chat', { user: p.userId, model: model.id, provider: model.provider, plan: p.plan, reason });
+  log.info('ai chat', { user: p.userId, model: model.id, provider: model.provider, reason });
 
   const userPrompt = body.messages.filter((m) => m.role === 'user').pop()?.content || '';
   const temporary = !!body.temporary;
@@ -240,7 +238,6 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
         strictModel: true,
         messages: chatMessages,
         userId: p.userId,
-        planId: p.plan,
         effort: body.effort ?? 'high',
         sourceDetails: body.sourceDetails ?? 'low',
         reason,
@@ -273,14 +270,6 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
           }
         } else if (ev.type === 'usage') {
           assistantCredits = ev.credits;
-        } else if (ev.type === 'done') {
-          chargeUserCredits(p, {
-            sessionId: `hds:ai:${p.userId}`,
-            taskId: `ai:${model!.id}:${Date.now()}`,
-            credits: ev.credits,
-            costUsd: ev.credits / 100,
-            minimum: 1,
-          });
         }
       }
 

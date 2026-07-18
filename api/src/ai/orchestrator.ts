@@ -31,7 +31,6 @@ export interface AiChatOpts {
   strictModel?: boolean;
   messages: { role: 'user' | 'assistant'; content: string; images?: MsgImage[] }[];
   userId?: string;
-  planId?: string;
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /** RAG depth for hd_search — snippet-only vs full page reads. Default low. */
   sourceDetails?: 'low' | 'medium' | 'high';
@@ -118,11 +117,11 @@ Use markdown headings for sections when helpful. Include specific names, amounts
 Cite sources inline as [n]. If data conflicts across sources, note the discrepancy.`;
 }
 
-async function modelReady(model: LlmModel, userId?: string, planId?: string): Promise<boolean> {
+async function modelReady(model: LlmModel, userId?: string): Promise<boolean> {
   const provider = getProvider(model.provider);
   if (!provider) return false;
   try {
-    return await provider.available(model, userId, planId);
+    return await provider.available(model, userId);
   } catch {
     return false;
   }
@@ -139,7 +138,7 @@ export async function* runAiChat(opts: AiChatOpts): AsyncGenerator<AiEvent> {
   const ready: LlmModel[] = [];
   for (const m of candidates) {
     if (!opts.strictModel && ready.length >= 3) break;
-    if (await modelReady(m, opts.userId, opts.planId)) ready.push(m);
+    if (await modelReady(m, opts.userId)) ready.push(m);
   }
 
   if (!ready.length) {
@@ -233,7 +232,6 @@ async function* runOnce(
         messages,
         tools: toolSpecs,
         userId: opts.userId,
-        planId: opts.planId,
         effort: opts.effort,
         maxOutputTokens: 8000,
       });
@@ -315,7 +313,6 @@ async function* runOnce(
         messages,
         tools: [],
         userId: opts.userId,
-        planId: opts.planId,
         effort: opts.effort,
         maxOutputTokens: 8000,
       });

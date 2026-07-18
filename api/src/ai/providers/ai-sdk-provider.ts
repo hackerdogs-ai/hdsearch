@@ -48,24 +48,24 @@ function toAiSdkMessages(messages: NeutralMsg[]): any[] {
   return out;
 }
 
-async function resolveApiKey(config: AiSdkProviderConfig, userId?: string, planId?: string): Promise<string | undefined> {
+async function resolveApiKey(config: AiSdkProviderConfig, userId?: string): Promise<string | undefined> {
   for (const envKey of config.envKeys || []) {
     const v = process.env[envKey];
     if (v) return v;
   }
-  return (await resolveKey(userId, config.keyField, planId)) || undefined;
+  return (await resolveKey(userId, config.keyField)) || undefined;
 }
 
 export function createAiSdkProvider(config: AiSdkProviderConfig): LlmProvider {
   return {
     id: config.id,
 
-    async available(_model: LlmModel, userId?: string, planId?: string): Promise<boolean> {
-      return !!(await resolveApiKey(config, userId, planId));
+    async available(_model: LlmModel, userId?: string): Promise<boolean> {
+      return !!(await resolveApiKey(config, userId));
     },
 
     async *streamTurn(args: TurnArgs): AsyncGenerator<StreamDelta, TurnResult, void> {
-      const apiKey = await resolveApiKey(config, args.userId, args.planId);
+      const apiKey = await resolveApiKey(config, args.userId);
       if (!apiKey) throw new Error(`no-${config.id}-key`);
 
       const languageModel = config.createModel(apiKey, args.model.id);

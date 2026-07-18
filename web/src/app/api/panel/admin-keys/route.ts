@@ -18,8 +18,8 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   if (!getSession()) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
-  if (!body.provider || !body.field || !body.planId || !body.secret) {
-    return NextResponse.json({ error: 'provider, field, planId, and secret required' }, { status: 400 });
+  if (!body.provider || !body.field || !body.secret) {
+    return NextResponse.json({ error: 'provider, field, and secret required' }, { status: 400 });
   }
   try {
     const r = await api.adminPutDefaultKey(body);
@@ -33,8 +33,8 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!getSession()) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
-  if (!body.field || !body.planId) {
-    return NextResponse.json({ error: 'field and planId required' }, { status: 400 });
+  if (!body.field) {
+    return NextResponse.json({ error: 'field required' }, { status: 400 });
   }
   try {
     const r = await api.adminDeleteDefaultKey(body);
