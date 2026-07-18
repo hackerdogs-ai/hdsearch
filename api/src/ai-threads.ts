@@ -28,7 +28,8 @@ export interface AiMessageRecord {
   role: 'user' | 'assistant';
   content: AiContentPart[];
   createdAt: number;
-  credits?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   model?: string;
 }
 

@@ -4,7 +4,7 @@
 // returns a normalized TurnResult. This is what lets one agent loop drive many
 // providers. See docs/AI_MODE_SPEC.md §6, §11.1.
 import type { LlmModel } from '../models.js';
-import type { TokenUsage } from '../../credits.js';
+import type { TokenUsage } from '../../tokens.js';
 
 /** One tool call the model wants to make. */
 export interface ToolCall {

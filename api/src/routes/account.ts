@@ -1,6 +1,6 @@
 // Account / dashboard / history (spec §8 LH panel pages). These feed the
 // Next.js user panel: Dashboard (metrics from Timescale) and Search History.
-// No plans/quotas/credits — this build is free and self-hosted.
+// No plans or quotas — this build is free and self-hosted.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { requireAuth } from '../auth.js';

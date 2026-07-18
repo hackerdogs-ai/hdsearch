@@ -1,6 +1,6 @@
 // Client for the central hackerdogs-core auth, used when HDSEARCH_AUTH_MODE includes
 // 'core'. Verifies the core-issued HS256 JWT (same JWT_SECRET_KEY the core signs with).
-// Billing/plan lookups are gone — this build has no plans, quotas, or credits.
+// Billing/plan lookups are gone — this build has no plans or quotas.
 // (Legacy; the open-source self-host build uses local auth, not core.)
 import { verify } from 'hono/jwt';
 import { env } from './env.js';

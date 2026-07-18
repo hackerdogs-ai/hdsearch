@@ -21,7 +21,7 @@ import { openaiRoutes } from './routes/openai-compat.js';
 import { trendsRoutes } from './routes/trends.js';
 import { authLocalRoutes } from './routes/auth-local.js';
 import { setupRoutes } from './routes/setup.js';
-// Billing is retired — no plans/credits/quotas in the open-source build (see docs/OPEN_SOURCE_MIGRATION.md).
+// No plans, quotas, or credits — this build is free and self-hosted.
 
 export function buildApp(): Hono {
   const app = new Hono();

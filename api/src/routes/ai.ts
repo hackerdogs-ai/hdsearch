@@ -177,7 +177,8 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
     const toolIndex = new Map<string, { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown; result?: unknown; isError?: boolean }>();
     let textPart: { type: 'text'; text: string } | null = null;
     let reasoningPart: { type: 'reasoning'; text: string } | null = null;
-    let assistantCredits = 0;
+    let assistantInputTokens = 0;
+    let assistantOutputTokens = 0;
 
     try {
       // RAG grounding: if this thread has processed files (or the client named
@@ -269,7 +270,8 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
             if (ev.error) part.isError = true;
           }
         } else if (ev.type === 'usage') {
-          assistantCredits = ev.credits;
+          assistantInputTokens = ev.inputTokens;
+          assistantOutputTokens = ev.outputTokens;
         }
       }
 
@@ -285,7 +287,8 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
           modelId: model!.id,
           inputMessages: body.messages,
           assistantParts,
-          assistantCredits,
+          assistantInputTokens,
+          assistantOutputTokens,
         }).catch((e) => log.warn('ai thread persist failed', errFields(e)));
       }
     } catch (e) {
@@ -303,7 +306,8 @@ interface PersistTurnArgs {
   modelId: string;
   inputMessages: { role: 'user' | 'assistant'; content: string }[];
   assistantParts: AiContentPart[];
-  assistantCredits: number;
+  assistantInputTokens: number;
+  assistantOutputTokens: number;
 }
 
 // Merge the new turn onto the existing (or fresh) blob and save. The client sends
@@ -325,7 +329,8 @@ async function persistTurn(a: PersistTurnArgs): Promise<void> {
     role: 'assistant',
     content: a.assistantParts,
     createdAt: now,
-    credits: a.assistantCredits,
+    inputTokens: a.assistantInputTokens,
+    outputTokens: a.assistantOutputTokens,
     model: a.modelId,
   });
 

@@ -264,10 +264,12 @@ function MessageMetaFooter() {
     s.message.role === 'assistant' ? (s.message.metadata?.custom as Record<string, unknown> | undefined) : undefined,
   );
   const { models } = useAiSearch();
-  if (!custom?.model && custom?.credits == null) return null;
+  if (!custom?.model && custom?.totalTokens == null) return null;
   const modelId = custom?.model != null ? String(custom.model) : '';
   const m = models.find((x) => x.id === modelId);
-  const credits = custom?.credits;
+  const inTok = Number(custom?.inputTokens ?? 0);
+  const outTok = Number(custom?.outputTokens ?? 0);
+  const total = custom?.totalTokens != null ? Number(custom.totalTokens) : inTok + outTok;
   return (
     <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-ink-400">
       {modelId && <span className="chip py-0.5">{m?.label || modelId}</span>}
@@ -277,9 +279,12 @@ function MessageMetaFooter() {
         </span>
       )}
       {custom?.reason != null && custom.reason !== 'pinned by user' && <span>· {String(custom.reason)}</span>}
-      {credits != null && (
-        <span className="chip py-0.5 text-brand-700">
-          {Number(credits) === 0 ? 'free (self-hosted)' : `${credits} credits`}
+      {custom?.totalTokens != null && (
+        <span
+          className="chip py-0.5 text-brand-700"
+          title={`${inTok.toLocaleString()} in · ${outTok.toLocaleString()} out`}
+        >
+          {total.toLocaleString()} tokens
         </span>
       )}
     </div>

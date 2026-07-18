@@ -1,12 +1,12 @@
 // AI Mode agent loop — provider-agnostic. Picks an LlmProvider for the chosen model
 // (Anthropic, Ollama, …), streams the answer, runs tool calls (built-in HD-Search tools
-// + MCP tools), loops until the model is done, and meters the run in credits. Emits a
+// + MCP tools), loops until the model is done, and reports the tokens used. Emits a
 // normalized event stream consumed by the SSE route + web UI. If the chosen model can't
 // start (no key / endpoint down), it falls back down the provided chain before failing.
 // See docs/AI_MODE_SPEC.md §5, §11.1.
 import { isDev } from '../env.js';
 import { collectTools } from './tools.js';
-import { meter, type TokenUsage } from '../credits.js';
+import { totalTokens, type TokenUsage } from '../tokens.js';
 import type { LlmModel } from './models.js';
 import { getProvider } from './providers/index.js';
 import { recordResult } from './health.js';
@@ -20,8 +20,8 @@ export type AiEvent =
   | { type: 'thinking'; delta: string }
   | { type: 'tool_call'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; name: string; ui?: unknown; citations?: { title: string; url: string }[]; error?: string }
-  | { type: 'usage'; inputTokens: number; outputTokens: number; providerCostUsd: number; credits: number }
-  | { type: 'done'; stopReason: string; credits: number }
+  | { type: 'usage'; inputTokens: number; outputTokens: number; totalTokens: number }
+  | { type: 'done'; stopReason: string; totalTokens: number }
   | { type: 'error'; message: string; retriable: boolean };
 
 export interface AiChatOpts {
@@ -35,7 +35,6 @@ export interface AiChatOpts {
   /** RAG depth for hd_search — snippet-only vs full page reads. Default low. */
   sourceDetails?: 'low' | 'medium' | 'high';
   maxSteps?: number;
-  creditCeiling?: number;
   reason?: string;
   /** Browser-reported UTC + local clock; injected into the system prompt each turn. */
   clientTime?: ClientTimeContext;
@@ -195,9 +194,9 @@ export async function* runAiChat(opts: AiChatOpts): AsyncGenerator<AiEvent> {
     break;
   }
 
-  const m = meter(total, used);
-  yield { type: 'usage', inputTokens: total.inputTokens, outputTokens: total.outputTokens, providerCostUsd: m.providerCostUsd, credits: m.credits };
-  yield { type: 'done', stopReason: errored ? 'error' : stopReason, credits: m.credits };
+  const used_total = totalTokens(total);
+  yield { type: 'usage', inputTokens: total.inputTokens, outputTokens: total.outputTokens, totalTokens: used_total };
+  yield { type: 'done', stopReason: errored ? 'error' : stopReason, totalTokens: used_total };
 }
 
 interface AttemptResult {
@@ -294,12 +293,6 @@ async function* runOnce(
 
       // Stop spinning when every call this turn was a duplicate (same tool+input already ran).
       if (freshCalls === 0) break;
-
-      const so = meter(total, model);
-      if (opts.creditCeiling && so.credits >= opts.creditCeiling) {
-        stopReason = 'credit_ceiling';
-        break;
-      }
     }
 
     // If the loop ended mid-research (tools ran but no final text-only turn), force synthesis.

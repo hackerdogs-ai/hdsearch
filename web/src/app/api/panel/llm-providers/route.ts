@@ -1,5 +1,5 @@
 // BFF: LLM provider registry → /v1/admin/llm-providers (admin-gated API-side).
-// Custom providers are persisted in S3 by the API.
+// Custom providers are persisted in Postgres (llm_providers, source='admin').
 import { NextRequest, NextResponse } from 'next/server';
 import { api, ApiError } from '@/lib/api';
 import { getSession } from '@/lib/session';

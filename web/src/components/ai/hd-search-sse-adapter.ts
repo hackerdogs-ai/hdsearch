@@ -195,7 +195,7 @@ export function createHdSearchSseAdapter(opts: HdSearchSseAdapterOptions): ChatM
               break;
             }
             case 'usage':
-              customMeta = { ...customMeta, credits: ev.credits };
+              customMeta = { ...customMeta, inputTokens: ev.inputTokens, outputTokens: ev.outputTokens, totalTokens: ev.totalTokens };
               yield emit();
               break;
             case 'error':

@@ -3,7 +3,7 @@
 // budget, key availability, enabled), then minimize the normalized weighted score.
 // Returns a RANKED list — [0] is the pick, the rest is the fallback chain.
 import type { LlmModel } from './models.js';
-import { providerCostUsd, type TokenUsage } from '../credits.js';
+import { providerCostUsd, type TokenUsage } from '../tokens.js';
 
 /** Set to true to re-enable OR optimizer auto-selection (cost/latency/failure). */
 export const AUTO_SELECT_ENABLED = false;
@@ -25,7 +25,7 @@ export interface SelectContext {
   promptTokens: number; // size of prompt+history+tool schemas
   estOutputTokens: number; // per-modality prior
   needs: { tools?: boolean; vision?: boolean };
-  budgetUsd?: number; // remaining credit budget converted to USD (optional cap)
+  budgetUsd?: number; // optional cost cap for model selection (USD)
   hasKey: (model: LlmModel) => boolean; // user has a key (or model is self-hosted)
   statsFor: (id: string) => ModelStats; // telemetry lookup
   weights?: SelectWeights;
