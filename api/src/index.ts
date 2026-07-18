@@ -87,7 +87,7 @@ async function bootstrapAdminUser(): Promise<void> {
   const { isSetupRequired, localUserId } = await import('./routes/auth-local.js');
   if (!(await isSetupRequired())) return;
   const { hashPassword, validatePassword } = await import('./password.js');
-  const pwErr = validatePassword(env.adminPassword);
+  const pwErr = validatePassword(env.adminPassword, env.adminEmail);
   if (pwErr) {
     log.warn('HDSEARCH_ADMIN_PASSWORD rejected; skipping admin bootstrap', { reason: pwErr });
     return;
@@ -128,6 +128,11 @@ async function main() {
 
   // Load LLM models from DB (sync JSON defaults on first run)
   if (dbOk) {
+    // Register admin-defined providers (stored in S3) before the registry loads,
+    // so their models resolve to a working adapter on the first request.
+    const { refreshCustomProviders } = await import('./ai/providers/index.js');
+    const customCount = await refreshCustomProviders();
+    if (customCount) log.info(`registered ${customCount} admin-defined LLM provider(s) from S3`);
     const { refreshFromDb } = await import('./ai/models.js');
     await refreshFromDb().catch((e) => log.warn('LLM registry DB sync failed (using JSON fallback)', { error: (e as Error).message }));
   }

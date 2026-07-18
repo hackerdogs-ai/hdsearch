@@ -14,8 +14,12 @@ import {
 } from '../cache-ttl.js';
 import { listDefaultKeys, upsertDefaultKey, deleteDefaultKey } from '../ai/default-keys.js';
 import { getProviderMeta, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
-import { upsertModel, deleteModel, loadAllModelsForAdmin } from '../ai/model-registry-db.js';
+import { upsertModel, deleteModel, loadAllModelsForAdmin, upsertProvider, deleteProvider } from '../ai/model-registry-db.js';
+import { refreshCustomProviders, allProviderIds } from '../ai/providers/index.js';
 import { log, errFields } from '../logger.js';
+
+/** Provider ids compiled into the image — these can never be overwritten or deleted. */
+const BUILT_IN_PROVIDER_IDS = new Set(allProviderIds());
 
 export const adminRoutes = new Hono();
 adminRoutes.use('*', requireAuth());
@@ -119,8 +123,64 @@ adminRoutes.put('/cache-ttl', async (c) => {
 });
 
 // GET /v1/admin/llm-providers — registry metadata (no secrets)
-adminRoutes.get('/llm-providers', async (_c) => {
-  return _c.json({ providers: getProviderMeta() });
+adminRoutes.get('/llm-providers', async (c) => {
+  await refreshFromDb();
+  return c.json({ providers: getProviderMeta() });
+});
+
+// Admin-defined providers are addressed as OpenAI-compatible endpoints and stored
+// in hd_search.llm_providers (source='admin'), alongside the models that FK to them.
+// Only admin:platform can write.
+const ProviderSchema = z.object({
+  id: z.string().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]*$/, 'id must be lowercase alphanumeric, - or _'),
+  name: z.string().min(1).max(200),
+  description: z.string().max(500).optional(),
+  website: z.string().max(500).optional(),
+  docsUrl: z.string().max(500).optional(),
+  baseUrl: z.string().url().max(500),
+  keyField: z.string().min(1).max(64).optional(),
+  accessType: z.enum(['commercial', 'self-hosted', 'freemium']).default('commercial'),
+  supportsStreaming: z.boolean().default(true),
+});
+
+// POST /v1/admin/llm-providers — add or update a custom provider (persisted to S3)
+adminRoutes.post('/llm-providers', async (c) => {
+  const parsed = ProviderSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
+  const p = c.get('principal');
+  if (BUILT_IN_PROVIDER_IDS.has(parsed.data.id)) {
+    return c.json({ error: 'bad_request', message: `'${parsed.data.id}' is a built-in provider` }, 400);
+  }
+  try {
+    await upsertProvider({ ...parsed.data, keyField: parsed.data.keyField || parsed.data.id }, p.userId);
+    await refreshCustomProviders();
+    await refreshFromDb();
+    log.info('admin: upsert LLM provider', { provider: parsed.data.id, admin: p.userId });
+    return c.json({ saved: parsed.data.id, providers: getProviderMeta() });
+  } catch (e) {
+    log.error('admin: upsert provider failed', errFields(e));
+    return c.json({ error: 'server_error', message: (e as Error).message }, 500);
+  }
+});
+
+// DELETE /v1/admin/llm-providers/:id — remove a custom provider
+adminRoutes.delete('/llm-providers/:id', async (c) => {
+  const id = c.req.param('id');
+  const p = c.get('principal');
+  if (BUILT_IN_PROVIDER_IDS.has(id)) {
+    return c.json({ error: 'bad_request', message: `'${id}' is a built-in provider and cannot be removed` }, 400);
+  }
+  try {
+    const ok = await deleteProvider(id);
+    if (!ok) return c.json({ error: 'not_found' }, 404);
+    await refreshCustomProviders();
+    await refreshFromDb();
+    log.info('admin: delete LLM provider', { provider: id, admin: p.userId });
+    return c.json({ deleted: true, providers: getProviderMeta() });
+  } catch (e) {
+    log.error('admin: delete provider failed', errFields(e));
+    return c.json({ error: 'server_error', message: (e as Error).message }, 500);
+  }
 });
 
 // GET /v1/admin/llm-models — list all models (includes disabled + source tag)

@@ -187,6 +187,9 @@ CREATE INDEX IF NOT EXISTS llm_models_provider_idx ON hd_search.llm_models (prov
 
 -- Backfill: add source column to llm_providers if missing (added after initial table creation)
 ALTER TABLE hd_search.llm_providers ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'json';
+-- Backfill: OpenAI-compatible base URL for admin-added providers (NULL for built-ins,
+-- which carry their endpoint in the shipped adapter).
+ALTER TABLE hd_search.llm_providers ADD COLUMN IF NOT EXISTS base_url TEXT;
 
 -- ---------------------------------------------------------------------------
 -- Uploaded files (RAG). Raw bytes live in S3 (files/<user>/<thread>/<file>/…);

@@ -37,6 +37,8 @@ export interface LlmProviderMeta {
   keyFields: string[];
   supportsStreaming: boolean;
   dynamic?: boolean;
+  /** True for admin-added providers (llm_providers.source='admin'), deletable in the UI. */
+  custom?: boolean;
   models: LlmModel[];
 }
 
@@ -140,12 +142,9 @@ export async function refreshFromDb(): Promise<void> {
   } else {
     STATIC = JSON_STATIC;
   }
+  // Providers come from the DB (built-ins synced from JSON + admin-added rows).
   const dbProviders = await loadProvidersFromDb();
-  if (dbProviders && dbProviders.length > 0) {
-    PROVIDER_META = dbProviders;
-  } else {
-    PROVIDER_META = JSON_PROVIDERS;
-  }
+  PROVIDER_META = dbProviders && dbProviders.length > 0 ? dbProviders : JSON_PROVIDERS;
   BY_ID = rebuildIndex();
 }
 

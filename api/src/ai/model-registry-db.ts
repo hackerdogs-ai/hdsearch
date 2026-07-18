@@ -17,6 +17,21 @@ interface DbProvider {
   supports_streaming: boolean;
   dynamic: boolean;
   enabled: boolean;
+  source: string;
+  base_url: string | null;
+}
+
+/** An admin-added provider: an OpenAI-compatible endpoint registered at runtime. */
+export interface CustomProvider {
+  id: string;
+  name: string;
+  description?: string;
+  website?: string;
+  docsUrl?: string;
+  baseUrl: string;
+  keyField: string;
+  accessType: 'commercial' | 'self-hosted' | 'freemium';
+  supportsStreaming: boolean;
 }
 
 interface DbModel {
@@ -45,7 +60,7 @@ export async function loadProvidersFromDb(): Promise<LlmProviderMeta[] | null> {
   try {
     const rows = await tryQuery<DbProvider>(
       `SELECT id, name, description, website, docs_url, access_type,
-              key_fields, supports_streaming, dynamic, enabled
+              key_fields, supports_streaming, dynamic, enabled, source, base_url
        FROM ${SCHEMA}.llm_providers WHERE enabled = true ORDER BY name`,
       [],
     );
@@ -60,6 +75,7 @@ export async function loadProvidersFromDb(): Promise<LlmProviderMeta[] | null> {
       keyFields: Array.isArray(r.key_fields) ? r.key_fields : [],
       supportsStreaming: r.supports_streaming,
       dynamic: r.dynamic,
+      custom: r.source === 'admin',
       models: [],
     }));
     providerCache = { data: providers, at: Date.now() };
@@ -126,7 +142,7 @@ export async function syncJsonToDb(
            access_type = EXCLUDED.access_type, key_fields = EXCLUDED.key_fields,
            supports_streaming = EXCLUDED.supports_streaming, dynamic = EXCLUDED.dynamic,
            updated_at = now()
-         WHERE ${SCHEMA}.llm_providers.id = EXCLUDED.id`,
+         WHERE ${SCHEMA}.llm_providers.source = 'json'`,
         [p.id, p.name, p.description, p.website, p.docsUrl, p.accessType,
          JSON.stringify(p.keyFields), p.supportsStreaming, p.dynamic || false],
       );
@@ -235,6 +251,67 @@ export async function upsertModel(model: {
 export async function deleteModel(id: string): Promise<boolean> {
   const rows = await query<{ id: string }>(
     `DELETE FROM ${SCHEMA}.llm_models WHERE id = $1 RETURNING id`,
+    [id],
+  );
+  invalidateDbCache();
+  return rows.length > 0;
+}
+
+/** Admin-added providers (source='admin' with an endpoint) for adapter registration. */
+export async function loadCustomProviders(): Promise<CustomProvider[]> {
+  if (!dbAvailable()) return [];
+  try {
+    const rows = await tryQuery<DbProvider>(
+      `SELECT id, name, description, website, docs_url, access_type,
+              key_fields, supports_streaming, dynamic, enabled, source, base_url
+       FROM ${SCHEMA}.llm_providers
+       WHERE source = 'admin' AND base_url IS NOT NULL AND enabled = true
+       ORDER BY name`,
+      [],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description || undefined,
+      website: r.website || undefined,
+      docsUrl: r.docs_url || undefined,
+      baseUrl: r.base_url!,
+      keyField: (Array.isArray(r.key_fields) ? r.key_fields[0] : undefined) || r.id,
+      accessType: r.access_type as CustomProvider['accessType'],
+      supportsStreaming: r.supports_streaming,
+    }));
+  } catch (e) {
+    log.debug('loadCustomProviders failed', errFields(e));
+    return [];
+  }
+}
+
+/** Create or update an admin provider. Always stamped source='admin'. */
+export async function upsertProvider(p: CustomProvider, adminUserId: string): Promise<void> {
+  await query(
+    `INSERT INTO ${SCHEMA}.llm_providers
+       (id, name, description, website, docs_url, access_type, key_fields,
+        supports_streaming, dynamic, enabled, source, base_url, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,true,'admin',$9,$10)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name, description = EXCLUDED.description,
+       website = EXCLUDED.website, docs_url = EXCLUDED.docs_url,
+       access_type = EXCLUDED.access_type, key_fields = EXCLUDED.key_fields,
+       supports_streaming = EXCLUDED.supports_streaming, base_url = EXCLUDED.base_url,
+       source = 'admin', created_by = EXCLUDED.created_by, updated_at = now()`,
+    [p.id, p.name, p.description ?? null, p.website ?? null, p.docsUrl ?? null,
+     p.accessType, JSON.stringify([p.keyField]), p.supportsStreaming, p.baseUrl, adminUserId],
+  );
+  invalidateDbCache();
+}
+
+/**
+ * Delete an admin provider. Built-in ('json') rows are never removed. Its models
+ * go with it via the llm_models.provider_id ON DELETE CASCADE.
+ */
+export async function deleteProvider(id: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `DELETE FROM ${SCHEMA}.llm_providers WHERE id = $1 AND source = 'admin' RETURNING id`,
     [id],
   );
   invalidateDbCache();

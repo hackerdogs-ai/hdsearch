@@ -63,7 +63,7 @@ authLocalRoutes.post('/register', async (c) => {
   if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
   const email = parsed.data.email.trim();
   const name = parsed.data.name?.trim() || email.split('@')[0];
-  const pwErr = validatePassword(parsed.data.password);
+  const pwErr = validatePassword(parsed.data.password, email);
   if (pwErr) return c.json({ error: 'bad_request', message: pwErr }, 400);
 
   const setupRequired = await isSetupRequired();
