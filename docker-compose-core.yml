@@ -52,7 +52,9 @@ services:
       - HDSEARCH_AUTH_MODE=legacy
       - HDSEARCH_ADMIN_EMAIL=${HDSEARCH_ADMIN_EMAIL:-}
       - HDSEARCH_ADMIN_PASSWORD=${HDSEARCH_ADMIN_PASSWORD:-}
-      - HDSEARCH_OPEN_SIGNUP=${HDSEARCH_OPEN_SIGNUP:-false}
+      # Self-registration open by default (Databasus model); an admin can switch
+      # to invite-only in System Admin. Set =false here to lock it at deploy time.
+      - HDSEARCH_OPEN_SIGNUP=${HDSEARCH_OPEN_SIGNUP:-true}
     ports:
       - "${API_PORT:-8791}:8791"   # REST API
       - "${MCP_PORT:-8792}:8792"   # MCP (Streamable HTTP)

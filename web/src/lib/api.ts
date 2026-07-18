@@ -154,4 +154,6 @@ export const api = {
   adminPutDefaultKey: (body: Record<string, unknown>) => apiCall('/v1/admin/default-keys', { body, method: 'PUT' }),
   adminDeleteDefaultKey: (body: Record<string, unknown>) => apiCall('/v1/admin/default-keys', { body, method: 'DELETE' }),
   adminLlmProviders: () => apiCall('/v1/admin/llm-providers'),
+  adminGetSignup: () => apiCall('/v1/admin/signup'),
+  adminSetSignup: (allow: boolean) => apiCall('/v1/admin/signup', { body: { allow }, method: 'PUT' }),
 };

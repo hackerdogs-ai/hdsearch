@@ -88,6 +88,16 @@ that connects HD-Search to its infrastructure:
 That's the whole setup. **There are no secrets to configure** — the app
 auto-generates its crypto secrets on first boot.
 
+### Accounts (the Databasus/Directus model)
+
+- **First run → create the admin.** With no accounts yet, the sign-in page shows
+  **"Create your admin account"**; the account you create becomes the administrator.
+- **Self-service sign-up is open by default** — the sign-in page has a *Create an
+  account* link (email, password, confirm) that creates a normal user.
+- **Lock it down anytime** at **System Admin → User registration**: flip to
+  **invite-only** and the sign-up form disappears (admins create accounts). Or set
+  `HDSEARCH_OPEN_SIGNUP=false` at deploy time.
+
 - **Add search/LLM provider keys later, in the UI** — *Account → Provider Keys* (per-user) or *System Admin* (system-wide). The free/self-hosted engines and local Ollama work with no keys.
 - The API also serves the **MCP server (Streamable HTTP) on `:8792`**, in the same container — no separate process to run.
 - **Build from source** instead of pulling images: `./publish_to_docker.sh --build-only --native <ns>` then run any compose above (they use `<ns>/hdsearch:*`).
@@ -194,7 +204,7 @@ URLs, and flags. Copy `.env.selfhost.example` to change a default.
 | `WEB_PORT` / `API_PORT` | `3000` / `8791` | Published host ports |
 | `PUBLIC_API_URL` / `APP_BASE_URL` | localhost | Public URLs (set to your domain in prod) |
 | `HDSEARCH_ADMIN_EMAIL` / `_PASSWORD` | – | Headless admin bootstrap (else use the UI) |
-| `HDSEARCH_OPEN_SIGNUP` | `false` | Allow self-service signup |
+| `HDSEARCH_OPEN_SIGNUP` | `true` | Allow self-service signup (admin can override at **System Admin → User registration**) |
 | `HDSEARCH_OLLAMA_URL` | `host.docker.internal:11434` | Local LLMs for AI Search |
 | `HDSEARCH_OPENSERP_ENGINES` | `google,yandex,bing,baidu` | OpenSERP engine order |
 | `HDSEARCH_EMBEDDINGS_PROVIDER` | `minilm` | `minilm` \| `openai` \| `none` |

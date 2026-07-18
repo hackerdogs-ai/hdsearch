@@ -5,6 +5,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../auth.js';
 import { encryptionAvailable } from '../crypto.js';
+import { saveConfig } from '../runtime-config.js';
+import { signupAllowed } from './auth-local.js';
 import { listDefaultKeys, upsertDefaultKey, deleteDefaultKey } from '../ai/default-keys.js';
 import { getProviderMeta, getPlanAccess, listModels, invalidateDbCache, refreshFromDb } from '../ai/models.js';
 import { upsertModel, deleteModel } from '../ai/model-registry-db.js';
@@ -66,6 +68,21 @@ adminRoutes.delete('/default-keys', async (c) => {
     return c.json({ deleted: true });
   }
   return c.json({ error: 'not_found' }, 404);
+});
+
+// GET /v1/admin/signup — current self-registration policy
+adminRoutes.get('/signup', (c) => c.json({ allowSignup: signupAllowed() }));
+
+const SignupSchema = z.object({ allow: z.boolean() });
+
+// PUT /v1/admin/signup — open self-registration or switch to invite-only
+adminRoutes.put('/signup', async (c) => {
+  const parsed = SignupSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'bad_request', issues: parsed.error.issues }, 400);
+  const p = c.get('principal');
+  saveConfig({ allowSignup: parsed.data.allow });
+  log.info('admin: set signup policy', { allowSignup: parsed.data.allow, admin: p.userId });
+  return c.json({ allowSignup: parsed.data.allow });
 });
 
 // GET /v1/admin/llm-providers — registry metadata (no secrets)

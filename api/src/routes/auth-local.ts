@@ -13,9 +13,20 @@ import { env } from '../env.js';
 import { SCHEMA, query, tryQuery } from '../db.js';
 import { hashPassword, verifyPassword, validatePassword } from '../password.js';
 import { issueKey, listKeys, DEFAULT_SCOPES } from '../apikeys.js';
+import { getAllowSignup } from '../runtime-config.js';
 import { log, errFields } from '../logger.js';
 
 export const authLocalRoutes = new Hono();
+
+/** Whether normal users may self-register. Open by default (the Databasus model);
+ *  an admin can switch to invite-only, or HDSEARCH_OPEN_SIGNUP can force it via env.
+ *  Precedence: admin toggle (runtime-config) → env (if explicitly set) → open. */
+export function signupAllowed(): boolean {
+  const admin = getAllowSignup();
+  if (typeof admin === 'boolean') return admin;
+  if (process.env.HDSEARCH_OPEN_SIGNUP != null) return env.openSignup;
+  return true;
+}
 
 /** Stable local user id derived from the email. */
 export function localUserId(email: string): string {
@@ -37,7 +48,7 @@ export async function isSetupRequired(): Promise<boolean> {
 // GET /v1/auth/status — drives the web login vs. first-run-setup screens.
 authLocalRoutes.get('/status', async (c) => {
   const setupRequired = await isSetupRequired();
-  return c.json({ localAuthEnabled: true, setupRequired, openSignup: env.openSignup });
+  return c.json({ localAuthEnabled: true, setupRequired, openSignup: signupAllowed() });
 });
 
 const RegisterSchema = z.object({
@@ -56,7 +67,7 @@ authLocalRoutes.post('/register', async (c) => {
   if (pwErr) return c.json({ error: 'bad_request', message: pwErr }, 400);
 
   const setupRequired = await isSetupRequired();
-  if (!setupRequired && !env.openSignup) {
+  if (!setupRequired && !signupAllowed()) {
     return c.json({ error: 'registration_closed', message: 'registration is closed; ask an admin to create your account' }, 403);
   }
 

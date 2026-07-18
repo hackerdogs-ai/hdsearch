@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { api, ApiError } from '@/lib/api';
 import { SystemDefaultKeys } from '@/components/system-default-keys';
+import { SignupPolicy } from '@/components/signup-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,8 @@ export default async function AdminPage() {
           Manage system-wide default provider keys. Only administrators can access this page.
         </p>
       </div>
+
+      <SignupPolicy />
 
       <a
         href="/dashboard/admin/infrastructure"

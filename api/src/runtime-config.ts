@@ -54,6 +54,9 @@ export interface RuntimeConfig {
   tor?: ServiceConfig;
   /** Set true once the wizard is finished so it isn't shown again. */
   setupComplete?: boolean;
+  /** Admin toggle for open sign-up. Unset = fall back to env / built-in default
+   *  (open). false = invite-only (admin creates accounts). */
+  allowSignup?: boolean;
 }
 
 /** The service keys the wizard/settings can configure, in display order. */
@@ -83,6 +86,7 @@ export function saveConfig(patch: RuntimeConfig): RuntimeConfig {
     if (patch[k]) merged[k] = { ...(current[k] || {}), ...patch[k] };
   }
   if (typeof patch.setupComplete === 'boolean') merged.setupComplete = patch.setupComplete;
+  if (typeof patch.allowSignup === 'boolean') merged.allowSignup = patch.allowSignup;
   mkdirSync(dirname(CONFIG_FILE), { recursive: true });
   writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 });
   cache = merged;
@@ -95,6 +99,11 @@ export function configFilePath(): string {
 
 export function isSetupComplete(): boolean {
   return !!loadConfig().setupComplete;
+}
+
+/** Admin's persisted sign-up policy, or undefined if never set (use env/default). */
+export function getAllowSignup(): boolean | undefined {
+  return loadConfig().allowSignup;
 }
 
 /** Resolve a value: config-file → env → default. */

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Brand } from '@/components/brand';
+import { AuthCard } from '@/components/auth-card';
 import { config } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -36,63 +37,34 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
   const devLogin = config.devLoginEnabled && !localAuth; // dev-login only if local auth is unavailable
   const errMsg = searchParams.error ? ERROR_LABELS[searchParams.error] || `Login failed (${searchParams.error}).` : null;
 
+  // Local auth (the open-source default) renders the full onboarding card, which
+  // handles first-run admin creation, sign-in, and self-service sign-up.
+  if (localAuth) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-gradient-to-b from-brand-50 to-ink-50 px-4">
+        <div className="w-full max-w-sm">
+          <div className="mb-6 flex justify-center">
+            <Brand />
+          </div>
+          <AuthCard firstRun={firstRun} openSignup={!!status?.openSignup} error={errMsg} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-to-b from-brand-50 to-ink-50 px-4">
       <div className="card w-full max-w-sm p-8">
         <div className="mb-6 flex justify-center">
           <Brand />
         </div>
-        <h1 className="text-center text-xl font-bold text-ink-900">
-          {firstRun ? 'Create your admin account' : 'Sign in to hdsearch'}
-        </h1>
-        <p className="mt-1 text-center text-sm text-ink-500">
-          {firstRun
-            ? 'This is the first run — the account you create becomes the administrator.'
-            : 'Access your dashboard, API keys and usage.'}
-        </p>
-        <p className="mt-3 text-center text-sm text-ink-500">
-          By continuing you agree to our{' '}
-          <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>.
-        </p>
+        <h1 className="text-center text-xl font-bold text-ink-900">Sign in to hdsearch</h1>
 
         {errMsg && (
           <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-center text-sm text-red-700">{errMsg}</p>
         )}
 
-        {localAuth ? (
-          <form action="/api/auth/local" method="post" className="mt-6 space-y-3">
-            <input type="hidden" name="mode" value={firstRun ? 'register' : 'login'} />
-            {firstRun && (
-              <div>
-                <label className="label">Name</label>
-                <input name="name" placeholder="Your name" className="input" />
-              </div>
-            )}
-            <div>
-              <label className="label">Email</label>
-              <input name="email" type="email" required placeholder="you@example.com" className="input" />
-            </div>
-            <div>
-              <label className="label">Password</label>
-              <input
-                name="password"
-                type="password"
-                required
-                minLength={firstRun ? 8 : undefined}
-                placeholder={firstRun ? 'At least 8 characters' : 'Your password'}
-                className="input"
-              />
-            </div>
-            <button type="submit" className="btn-primary w-full">
-              {firstRun ? 'Create admin account' : 'Sign in'}
-            </button>
-            {!firstRun && status?.openSignup && (
-              <p className="text-center text-sm text-ink-400">
-                Need an account? Ask your administrator, or enable open signup.
-              </p>
-            )}
-          </form>
-        ) : devLogin ? (
+        {devLogin ? (
           <form action="/api/auth/dev" method="post" className="mt-6 space-y-3">
             <div>
               <label className="label">Name</label>
