@@ -127,6 +127,17 @@ build_image() {
 #   export DOCKERHUB_USERNAME=<user>
 #   export DOCKERHUB_TOKEN=<PAT>        # https://app.docker.com/settings/personal-access-tokens
 # The token is read from the environment and never printed or stored.
+#
+# Alternatively drop the credentials in ~/.config/hdsearch/dockerhub (mode 600):
+#   DOCKERHUB_USERNAME=<user>
+#   DOCKERHUB_TOKEN=<PAT>
+# so a PAT never has to be pasted into a shell that records history.
+DOCKERHUB_CREDS_FILE="${DOCKERHUB_CREDS_FILE:-$HOME/.config/hdsearch/dockerhub}"
+if [ -z "${DOCKERHUB_TOKEN:-}" ] && [ -f "$DOCKERHUB_CREDS_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$DOCKERHUB_CREDS_FILE"
+fi
+
 SHORT_DESC="Self-hosted API for search, crawl, vector search and agentic AI across 20+ engines."
 
 update_description() {
@@ -178,19 +189,33 @@ def drop_section(md, heading):
 # the parts that matter to someone pulling the image (quickstart, providers,
 # credits) survive rather than being blind-truncated off the end.
 HUB_OMIT = ["## 🛠️ Development", "## 🐳 Publish your own images",
-            "## 🗺️ Roadmap", "## 🤝 Contributing"]
+            "## 🗺️ Roadmap", "## 🤝 Contributing",
+            "## 📈 Production & scaling"]
+
+# The Hub counts BYTES, not characters — the emoji headings are 3-4 bytes each,
+# so a character count silently under-reports and the API rejects with a 400.
+def blen(t):
+    return len(t.encode("utf-8"))
 
 body = readme
 for h in HUB_OMIT:
-    if len(header) + len(body) + len(tail) <= LIMIT:
+    if blen(header) + blen(body) + blen(tail) <= LIMIT:
         break
     body = drop_section(body, h)
 
 full = header + body
-if len(full) + len(tail) > LIMIT:          # still too long → cut on a heading
-    cut_at = full[: LIMIT - len(tail)]
+if blen(full) + blen(tail) > LIMIT:        # still too long → cut on a heading
+    budget = LIMIT - blen(tail)
+    cut_at = full.encode("utf-8")[:budget].decode("utf-8", "ignore")
     k = cut_at.rfind("\n## ")
     full = cut_at[:k] if k > 0 else cut_at.rsplit("\n", 1)[0]
+    # Truncation drops whatever is last in the README — currently the credits.
+    # Say so, or the page silently loses sections nobody notices are missing.
+    lost = [l[3:] for l in body.splitlines()
+            if l.startswith("## ") and l not in full]
+    print(f"  WARNING: over {LIMIT} bytes even after omitting "
+          f"{len(HUB_OMIT)} sections; truncated away: {', '.join(lost) or 'tail'}",
+          file=sys.stderr)
 full = full.rstrip() + tail
 
 try:
