@@ -7,7 +7,7 @@ type Result = { reachable: boolean; ms?: number; detail?: string };
 type Vals = Record<string, { url: string; accessKey?: string; secretKey?: string; provider?: string }>;
 
 const DATASTORES = ['database', 'redis', 's3', 'embeddings'];
-const PROVIDERS = ['searxng', 'openserp', 'crawl4ai', 'browserless', 'tor'];
+const PROVIDERS = ['searxng', 'openserp', 'crawl4ai', 'firecrawl', 'browserless', 'tor'];
 /** Boot-snapshotted clients — changing these is what triggers a restart prompt. */
 const RESTART_KEYS = ['database', 'redis', 's3', 'tor'] as const;
 const HINT: Record<string, string> = {
@@ -18,6 +18,7 @@ const HINT: Record<string, string> = {
   searxng: 'Self-hosted meta-search.',
   openserp: 'Multi-engine SERP scraper.',
   crawl4ai: 'Crawler for the /crawl endpoint.',
+  firecrawl: 'Optional self-hosted Firecrawl (docker-compose-firecrawl.yml). Leave blank to skip.',
   browserless: 'Headless Chrome for JS-rendered pages.',
   tor: 'Tor SOCKS proxy for .onion darkweb search (optional).',
 };

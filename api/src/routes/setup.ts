@@ -26,6 +26,7 @@ const LABELS: Record<ServiceKey, string> = {
   searxng: 'SearXNG (meta-search)',
   openserp: 'OpenSERP',
   crawl4ai: 'Crawl4AI',
+  firecrawl: 'Firecrawl (self-hosted)',
   browserless: 'Browserless',
   tor: 'Tor proxy (darkweb)',
 };
@@ -46,6 +47,7 @@ function currentUrl(key: ServiceKey): string {
     case 'searxng': return env.searxngUrl;
     case 'openserp': return env.openserpUrl;
     case 'crawl4ai': return env.crawl4aiUrl;
+    case 'firecrawl': return env.firecrawlUrl;
     case 'browserless': return env.browserlessUrl;
     case 'tor': return env.torProxy;
   }
@@ -160,7 +162,7 @@ setupRoutes.post('/test', async (c) => {
 const svc = z.object({ url: z.string().optional(), accessKey: z.string().optional(), secretKey: z.string().optional(), provider: z.string().optional() }).partial();
 const SaveSchema = z.object({
   database: svc.optional(), redis: svc.optional(), s3: svc.optional(), embeddings: svc.optional(),
-  searxng: svc.optional(), openserp: svc.optional(), crawl4ai: svc.optional(), browserless: svc.optional(), tor: svc.optional(),
+  searxng: svc.optional(), openserp: svc.optional(), crawl4ai: svc.optional(), firecrawl: svc.optional(), browserless: svc.optional(), tor: svc.optional(),
   complete: z.boolean().optional(),
 });
 setupRoutes.put('/config', async (c) => {

@@ -1,0 +1,121 @@
+# HD-Search — OPTIONAL Firecrawl crawler (opt-in).
+#
+# Firecrawl (AGPL-3.0) is an extra crawl provider. It is NOT part of the default
+# stack because it is heavy: its own Postgres, Redis, RabbitMQ and a Playwright
+# service, and upstream recommends ~4 CPU / 8 GB for the API alone. The bundled
+# crawl4ai + browserless pair covers most crawling at a fraction of that.
+#
+# Also worth knowing before enabling it: Firecrawl's anti-bot engine ("fire-engine")
+# is closed-source and cloud-only, so a self-hosted instance has no anti-bot
+# capability and you supply your own proxies.
+#
+#   # start it alongside the normal stack (network hdsearchnet must already exist):
+#   docker compose -f docker-compose-full.yml up -d
+#   docker compose -f docker-compose-firecrawl.yml up -d
+#
+#   # then point HD-Search at it (or set it in the setup wizard / Infrastructure page):
+#   HDSEARCH_FIRECRAWL_URL=http://hds-firecrawl:3002
+#
+# Auth is disabled (USE_DB_AUTHENTICATION=false), so no API key is needed — HD-Search
+# detects a self-hosted endpoint and stops requiring the `firecrawl` credential.
+#
+# Images are upstream's prebuilt GHCR builds; this file mirrors their
+# docker-compose.yaml (https://github.com/firecrawl/firecrawl). Unmodified upstream
+# containers behind a network API — the AGPL obligation stays with anyone who
+# modifies Firecrawl itself, exactly as with the bundled SearXNG (also AGPL).
+
+services:
+  hds-firecrawl:
+    image: ghcr.io/firecrawl/firecrawl:latest
+    container_name: hds-firecrawl
+    restart: unless-stopped
+    command: node dist/src/harness.js --start-docker
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3002
+      - INTERNAL_PORT=3002
+      - EXTRACT_WORKER_PORT=3004
+      - WORKER_PORT=3005
+      - ENV=local
+      # No Supabase → no API-key checking. This is what makes the instance keyless.
+      - USE_DB_AUTHENTICATION=false
+      - REDIS_URL=redis://hds-firecrawl-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://hds-firecrawl-redis:6379
+      - PLAYWRIGHT_MICROSERVICE_URL=http://hds-firecrawl-playwright:3000/scrape
+      - NUQ_RABBITMQ_URL=amqp://hds-firecrawl-rabbitmq:5672
+      - POSTGRES_HOST=hds-firecrawl-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${FIRECRAWL_POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${FIRECRAWL_POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${FIRECRAWL_POSTGRES_DB:-postgres}
+      # Optional: an LLM key unlocks Firecrawl's extract/LLM features. Plain
+      # scrape/crawl — all HD-Search asks of it — works without one.
+      - OPENAI_API_KEY=${FIRECRAWL_OPENAI_API_KEY:-}
+      - PROXY_SERVER=${FIRECRAWL_PROXY_SERVER:-}
+      - PROXY_USERNAME=${FIRECRAWL_PROXY_USERNAME:-}
+      - PROXY_PASSWORD=${FIRECRAWL_PROXY_PASSWORD:-}
+    ports:
+      - "${FIRECRAWL_PORT:-3002}:3002"
+    depends_on:
+      hds-firecrawl-redis:
+        condition: service_started
+      hds-firecrawl-playwright:
+        condition: service_started
+      hds-firecrawl-rabbitmq:
+        condition: service_healthy
+      hds-firecrawl-postgres:
+        condition: service_started
+    networks: [hdsearchnet]
+
+  hds-firecrawl-playwright:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    container_name: hds-firecrawl-playwright
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - MAX_CONCURRENT_PAGES=${FIRECRAWL_MAX_PAGES:-4}
+      - BLOCK_MEDIA=${FIRECRAWL_BLOCK_MEDIA:-true}
+      - PROXY_SERVER=${FIRECRAWL_PROXY_SERVER:-}
+      - PROXY_USERNAME=${FIRECRAWL_PROXY_USERNAME:-}
+      - PROXY_PASSWORD=${FIRECRAWL_PROXY_PASSWORD:-}
+    networks: [hdsearchnet]
+
+  # Firecrawl gets its OWN Redis/Postgres rather than sharing HD-Search's, so the
+  # two never contend for keyspace or connections.
+  hds-firecrawl-redis:
+    image: redis:alpine
+    container_name: hds-firecrawl-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    networks: [hdsearchnet]
+
+  hds-firecrawl-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: hds-firecrawl-rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [hdsearchnet]
+
+  hds-firecrawl-postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    container_name: hds-firecrawl-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${FIRECRAWL_POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${FIRECRAWL_POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${FIRECRAWL_POSTGRES_DB:-postgres}
+    volumes:
+      - hds-firecrawl-pgdata:/var/lib/postgresql/data
+    networks: [hdsearchnet]
+
+volumes:
+  hds-firecrawl-pgdata:
+
+networks:
+  hdsearchnet:
+    name: hdsearchnet
+    external: true

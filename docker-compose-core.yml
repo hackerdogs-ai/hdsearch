@@ -41,6 +41,9 @@ services:
       - HDSEARCH_OPENSERP_ENGINES=${HDSEARCH_OPENSERP_ENGINES:-google,yandex,bing,baidu}
       - HDSEARCH_SEARXNG_URL=${HDSEARCH_SEARXNG_URL:-http://hds-searxng:8080}
       - HDSEARCH_CRAWL4AI_URL=${HDSEARCH_CRAWL4AI_URL:-http://hds-crawl4ai:11235}
+      # Optional self-hosted Firecrawl (docker-compose-firecrawl.yml). Unset = the
+      # provider stays on the hosted API and needs a per-user key.
+      - HDSEARCH_FIRECRAWL_URL=${HDSEARCH_FIRECRAWL_URL:-}
       - HDSEARCH_BROWSERLESS_URL=${HDSEARCH_BROWSERLESS_URL:-http://hds-browserless:3000}
       - HDSEARCH_TOR_PROXY=${HDSEARCH_TOR_PROXY:-socks5h://hds-tor:9050}
       - HDSEARCH_GEOCODER_ENGINE=photon

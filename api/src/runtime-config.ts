@@ -50,6 +50,7 @@ export interface RuntimeConfig {
   searxng?: ServiceConfig;
   openserp?: ServiceConfig;
   crawl4ai?: ServiceConfig;
+  firecrawl?: ServiceConfig;
   browserless?: ServiceConfig;
   tor?: ServiceConfig;
   /** Set true once the wizard is finished so it isn't shown again. */
@@ -75,7 +76,7 @@ export interface RuntimeConfig {
 /** The service keys the wizard/settings can configure, in display order. */
 export const SERVICE_KEYS = [
   'database', 'redis', 's3', 'embeddings',
-  'searxng', 'openserp', 'crawl4ai', 'browserless', 'tor',
+  'searxng', 'openserp', 'crawl4ai', 'firecrawl', 'browserless', 'tor',
 ] as const;
 export type ServiceKey = (typeof SERVICE_KEYS)[number];
 

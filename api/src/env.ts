@@ -171,6 +171,9 @@ export const env = {
   openserpTimeoutMs: int(e.HDSEARCH_OPENSERP_TIMEOUT_MS, 30000),
   searxngUrl: pick(rc.searxng?.url, e.HDSEARCH_SEARXNG_URL, 'http://127.0.0.1:8899'),
   crawl4aiUrl: pick(rc.crawl4ai?.url, e.HDSEARCH_CRAWL4AI_URL, 'http://127.0.0.1:11235'),
+  // Optional self-hosted Firecrawl (docker-compose-firecrawl.yml). Empty = use the
+  // hosted api.firecrawl.dev, which needs a per-user API key.
+  firecrawlUrl: pick(rc.firecrawl?.url, e.HDSEARCH_FIRECRAWL_URL, ''),
   browserlessUrl: pick(rc.browserless?.url, e.HDSEARCH_BROWSERLESS_URL, 'http://127.0.0.1:3000'),
   browserlessToken: e.HDSEARCH_BROWSERLESS_TOKEN || e.BROWSERLESS_TOKEN || '',
   // AI Mode: local Ollama endpoint (self-hosted LLMs, no key, $0 cost).

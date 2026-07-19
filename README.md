@@ -102,6 +102,26 @@ auto-generates its crypto secrets on first boot.
 - The API also serves the **MCP server (Streamable HTTP) on `:8792`**, in the same container — no separate process to run.
 - **Build from source** instead of pulling images: `./publish_to_docker.sh --build-only --native <ns>` then run any compose above (they use `<ns>/hdsearch:*`).
 
+### Optional: self-hosted Firecrawl
+
+[Firecrawl](https://github.com/firecrawl/firecrawl) (AGPL-3.0) is available as an extra
+crawl provider. It is **opt-in**, not part of the default stack — it brings its own
+Postgres, Redis, RabbitMQ and Playwright service and wants ~8 GB RAM, while the bundled
+`crawl4ai` + `browserless` pair already covers most crawling.
+
+```bash
+docker compose -f docker-compose-firecrawl.yml up -d          # start it on hdsearchnet
+HDSEARCH_FIRECRAWL_URL=http://hds-firecrawl:3002 \
+  docker compose -f docker-compose-full.yml up -d hds-api      # point HD-Search at it
+```
+
+A self-hosted instance runs with auth disabled, so **no API key is needed** — HD-Search
+detects the local endpoint and stops asking for the `firecrawl` credential. You can also
+set the endpoint in the setup wizard or *System Admin → Infrastructure*.
+
+Worth knowing: Firecrawl's anti-bot engine is closed-source and cloud-only, so a
+self-hosted instance has no anti-bot capability and uses your own proxies.
+
 ### Try it
 
 ```bash
