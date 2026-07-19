@@ -1,4 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+/*
+ * Material Symbols icon font — self-hosted.
+ *
+ * Icons here are ligatures: the markup contains real text
+ * (<span class="material-symbols-outlined">menu_open</span>) that the font
+ * renders as a glyph. Two consequences drive everything below.
+ *
+ * 1. font-display MUST be `block`, never `swap`. `swap` means "paint the
+ *    fallback immediately", and the fallback for a ligature is the literal
+ *    word — so every icon rendered as text ("menu_open", "filter_list",
+ *    "chevron_left") at full text width until the font arrived, shoving the
+ *    layout around for a second on first load. `block` paints nothing instead.
+ *
+ * 2. The font is served from /public, not fonts.googleapis.com. `block` only
+ *    hides the text for ~3s; past that the browser paints the fallback anyway.
+ *    The old @import chained HTML -> globals.css -> Google CSS -> gstatic
+ *    woff2, and the Google CSS request did not even start until ~1s in, which
+ *    put us near that cliff. Same-origin makes it single-digit ms. It also
+ *    stops every page load from calling Google, which matters for a
+ *    self-hosted privacy tool and for air-gapped installs.
+ *
+ * Only the weight-400 face is vendored: .material-symbols-outlined pins
+ * font-weight: normal and nothing overrides it. If an icon ever needs another
+ * weight, add that face here rather than reaching back to the CDN.
+ */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
+}
 
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';

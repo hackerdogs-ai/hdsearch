@@ -19,6 +19,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // apiCall / dashboard gates refresh on demand via validCoreJwt().
   return (
     <html lang="en">
+      <head>
+        {/*
+          Start the icon font with the HTML instead of after globals.css parses.
+          Icons are ligatures rendered with font-display: block, so until the
+          font lands they occupy space but paint nothing — preloading keeps that
+          window to a few ms rather than a visible gap. crossOrigin is required
+          on font preloads even same-origin, or the fetch is made twice.
+        */}
+        <link
+          rel="preload"
+          href="/fonts/material-symbols-outlined.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-screen font-sans">
         <AuthFetchGuard />
         {/* Namespace localStorage search history per account (shared-browser safety). */}
