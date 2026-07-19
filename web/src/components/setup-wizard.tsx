@@ -8,6 +8,8 @@ type Vals = Record<string, { url: string; accessKey?: string; secretKey?: string
 
 const DATASTORES = ['database', 'redis', 's3', 'embeddings'];
 const PROVIDERS = ['searxng', 'openserp', 'crawl4ai', 'browserless', 'tor'];
+/** Boot-snapshotted clients — changing these is what triggers a restart prompt. */
+const RESTART_KEYS = ['database', 'redis', 's3', 'tor'] as const;
 const HINT: Record<string, string> = {
   database: 'Postgres / TimescaleDB connection string.',
   redis: 'Redis (with the RediSearch module) — used for cache + vector search.',
@@ -29,6 +31,7 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [restartRequired, setRestartRequired] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -72,6 +75,17 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
   // datastores step proceeds when every REQUIRED service is reachable
   const canProceed = step !== 1 || DATASTORES.filter(req).every(ok);
 
+  // Preview whether Review should warn about restart (DB/Redis/S3/Tor vs load-time values).
+  const wouldNeedRestart = RESTART_KEYS.some((k) => {
+    const initial = svcs.find((s) => s.key === k);
+    const v = vals[k];
+    if (!v || !initial) return false;
+    if ((v.url || '').trim() !== (initial.url || '').trim()) return true;
+    if (k === 's3' && (v.accessKey || '') !== (initial.accessKey || '')) return true;
+    if (k === 's3' && v.secretKey) return true;
+    return false;
+  });
+
   const finish = async () => {
     setSaving(true);
     const payload: any = { complete: true };
@@ -81,7 +95,11 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
     }
     try {
       const r = await fetch('/api/setup/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-      if (r.ok) setDone(true);
+      if (r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setRestartRequired(!!d.restartRequired);
+        setDone(true);
+      }
     } finally { setSaving(false); }
   };
 
@@ -93,13 +111,21 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
   if (loading) return <div className="card p-8 text-center text-sm text-ink-400">Loading setup…</div>;
 
   if (done) return (
-    <div className="card w-full max-w-lg p-8 text-center">
+    <div className="card mx-auto w-full max-w-lg p-8 text-center">
       <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-green-100 text-2xl text-green-700">✓</div>
       <h2 className="text-xl font-bold text-ink-900">{edit ? 'Configuration saved' : 'Setup complete'}</h2>
-      <p className="mt-2 text-sm text-ink-500">
-        Endpoints saved. <strong>Restart the API</strong> to apply infrastructure changes:
-      </p>
-      <pre className="mt-3 overflow-x-auto rounded bg-ink-800 px-3 py-2 text-left text-sm text-white">docker restart hds-api</pre>
+      {restartRequired ? (
+        <>
+          <p className="mt-2 text-sm text-ink-500">
+            Endpoints saved. <strong>Restart the API</strong> to apply database, Redis, storage, or Tor changes:
+          </p>
+          <pre className="mt-3 overflow-x-auto rounded bg-ink-800 px-3 py-2 text-left text-sm text-white">docker restart hds-api</pre>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-ink-500">
+          {edit ? 'Endpoints saved. No API restart needed.' : 'Endpoints saved. You can continue to sign-in.'}
+        </p>
+      )}
       <a href={edit ? '/dashboard/admin' : '/login'} className="btn-primary mt-6 inline-block">
         {edit ? 'Back to admin' : 'Continue to sign-in →'}
       </a>
@@ -189,7 +215,11 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
               </span>
             </div>
           ))}
-          <p className="pt-2 text-sm text-ink-400">Changing infrastructure endpoints requires an API restart to reconnect.</p>
+          {wouldNeedRestart && (
+            <p className="pt-2 text-sm text-ink-400">
+              Changing database, Redis, storage, or Tor requires an API restart to reconnect.
+            </p>
+          )}
         </div>
       )}
 

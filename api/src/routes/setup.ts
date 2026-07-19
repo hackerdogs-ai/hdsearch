@@ -1,10 +1,13 @@
 // First-run setup wizard API + Settings config. Lets the web wizard read the
 // current endpoints, TEST-connect to a proposed endpoint (so the Next button can
-// gate on reachability), and SAVE the config (file-backed; takes effect on restart).
+// gate on reachability), and SAVE the config (file-backed).
 //
 // Auth: every route requires the first-party internal secret (only the web BFF
 // calls these). Saving is open during first-run (no admin yet) and admin-only
 // afterwards.
+//
+// Restart: DB / Redis / S3 / Tor clients are built once at boot. Saving returns
+// restartRequired only when those values differ from the live process env.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { connect } from 'node:net';
@@ -29,6 +32,10 @@ const LABELS: Record<ServiceKey, string> = {
 // Required to reach for setup to complete (core datastores) vs optional providers.
 const REQUIRED: ServiceKey[] = ['database', 'redis'];
 
+/** Services whose connection clients are snapshotted at API boot. */
+const RESTART_KEYS = ['database', 'redis', 's3', 'tor'] as const;
+type RestartKey = (typeof RESTART_KEYS)[number];
+
 /** The currently-effective endpoint for a service (config → env → default). */
 function currentUrl(key: ServiceKey): string {
   switch (key) {
@@ -42,6 +49,43 @@ function currentUrl(key: ServiceKey): string {
     case 'browserless': return env.browserlessUrl;
     case 'tor': return env.torProxy;
   }
+}
+
+type SvcPatch = { url?: string; accessKey?: string; secretKey?: string; provider?: string };
+
+/** Live boot-time values for infra that needs a process restart to reconnect. */
+function liveInfra(key: RestartKey): { url: string; accessKey?: string; secretKey?: string } {
+  switch (key) {
+    case 'database': return { url: env.pgUrl };
+    case 'redis': return { url: env.redisUrl };
+    case 's3': return { url: env.s3Endpoint, accessKey: env.s3Key, secretKey: env.s3Secret };
+    case 'tor': return { url: env.torProxy };
+  }
+}
+
+/** Which restart-bound services in the save payload differ from the running process. */
+function restartChanges(services: Partial<Record<ServiceKey, SvcPatch>>): RestartKey[] {
+  const changed: RestartKey[] = [];
+  for (const key of RESTART_KEYS) {
+    const patch = services[key];
+    if (!patch) continue;
+    const live = liveInfra(key);
+    if (patch.url !== undefined && patch.url.trim() !== (live.url || '').trim()) {
+      changed.push(key);
+      continue;
+    }
+    if (key === 's3') {
+      if (patch.accessKey !== undefined && patch.accessKey !== live.accessKey) {
+        changed.push(key);
+        continue;
+      }
+      // Blank secret means "leave unchanged" (wizard omits or sends empty).
+      if (patch.secretKey !== undefined && patch.secretKey !== '' && patch.secretKey !== live.secretKey) {
+        changed.push(key);
+      }
+    }
+  }
+  return changed;
 }
 
 /** Parse host+port from any of the schemes we use (http, postgres, redis, socks5h). */
@@ -111,7 +155,8 @@ setupRoutes.post('/test', async (c) => {
 });
 
 // PUT /v1/setup/config — save endpoints (+ optional `complete`). Open during
-// first-run; admin-only afterwards. Takes effect on the next API restart.
+// first-run; admin-only afterwards. restartRequired when DB/Redis/S3/Tor differ
+// from the values the running API process was booted with.
 const svc = z.object({ url: z.string().optional(), accessKey: z.string().optional(), secretKey: z.string().optional(), provider: z.string().optional() }).partial();
 const SaveSchema = z.object({
   database: svc.optional(), redis: svc.optional(), s3: svc.optional(), embeddings: svc.optional(),
@@ -132,6 +177,8 @@ setupRoutes.put('/config', async (c) => {
   } catch (e) {
     return c.json({ error: 'server_error', message: (e as Error).message }, 500);
   }
-  log.info('setup config saved', { services: Object.keys(services), complete });
-  return c.json({ saved: true, restartRequired: true });
+  const changed = restartChanges(services);
+  const restartRequired = changed.length > 0;
+  log.info('setup config saved', { services: Object.keys(services), complete, restartRequired, changed });
+  return c.json({ saved: true, restartRequired, changed });
 });
