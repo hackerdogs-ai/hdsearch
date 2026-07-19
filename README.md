@@ -1,10 +1,10 @@
 <div align="center">
 
-# hdSearch (Stop paying for search API subscriptions)
+# hdsearch (Stop paying for search API subscriptions)
 
 **One self-hosted API for search, crawl, vector search, and agentic AI answers — across 20+ engines.**
 
-hdSearch is a **search results cache** that has built-in modalities and AI Search mode. It saves you **cash**. You work hard for money, save it, don't give it away in credits and subscriptions. 
+hdsearch is an aggregated **search results cache** with built-in modalities and an AI Search mode. It saves you **cash**. You work hard for money, save it, don't give it away in credits and subscriptions. 
 
 A free, open-source alternative to SerpAPI + Perplexity that you run on your own
 box. Prioritized multi-engine search with fallback & dedup, a Redis cache,
