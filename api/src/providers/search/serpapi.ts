@@ -13,7 +13,6 @@ const MAP: Record<string, { params: Record<string, string>; key: string; norm: M
   images: { params: { engine: 'google', tbm: 'isch' }, key: 'images_results', norm: 'images' },
   videos: { params: { engine: 'google', tbm: 'vid' }, key: 'video_results', norm: 'videos' },
   scholar: { params: { engine: 'google_scholar' }, key: 'organic_results', norm: 'scholar' },
-  shopping: { params: { engine: 'google_shopping' }, key: 'shopping_results', norm: 'shopping' },
   places: { params: { engine: 'google_maps', type: 'search' }, key: 'local_results', norm: 'places' },
 };
 
@@ -23,12 +22,12 @@ export const serpapi: SearchProvider = {
   category: 'search',
   accessType: 'freemium',
   defaultPriority: 210,
-  modalities: ['web', 'news', 'images', 'videos', 'scholar', 'shopping', 'places'],
+  modalities: ['web', 'news', 'images', 'videos', 'scholar', 'places'],
   requiresKeys: ['serpapi'],
   cacheTtlSec: 3600,
   docsUrl: 'https://serpapi.com/search-api',
   endpoint: 'GET https://serpapi.com/search.json?engine=google&q={q}&api_key={key}',
-  description: 'Structured SERP from 80+ engines incl. Scholar, Shopping, Maps, News, Images, Videos.',
+  description: 'Structured SERP from 80+ engines incl. Scholar, Maps, News, Images, Videos.',
   async search(req: SearchRequest, ctx: ProviderContext): Promise<NormalizedResult[]> {
     const key = await ctx.getKey('serpapi');
     if (!key) throw new ProviderError('serpapi', 'no serpapi api key configured', 401, false);

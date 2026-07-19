@@ -19,7 +19,7 @@ const ENDPOINTS = [
   { m: 'GET', p: '/v1/account', d: 'Profile, plan and current monthly usage.' },
   { m: 'GET', p: '/openapi.json', d: 'Full OpenAPI 3.1 spec.' },
 ];
-const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'shopping', 'code', 'social', 'archive', 'darkweb'];
+const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'code', 'social', 'archive', 'darkweb'];
 
 export function DocsContent({ apiHref = '/api' }: { apiHref?: string }) {
   return (

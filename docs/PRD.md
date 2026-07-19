@@ -24,7 +24,7 @@ caching, faceting, and a plugin system so new providers are a single file.
 ## 3. Goals / non-goals
 
 **Goals**
-- One API for **search** (web/news/images/videos/scholar/places/shopping/code/
+- One API for **search** (web/news/images/videos/scholar/places/code/
   social/archive/**darkweb**), **crawl** (URL → markdown/text/links/images), and
   **vector** index + KNN search.
 - **Priority-ordered fallback** (default) and **aggregate fan-out** (merge+dedup).

@@ -59,7 +59,7 @@ give; the pipeline is correct. Setup: host Ollama wired via
 ### P1 execution (Run 1 continued) — all attempted PASS
 
 - **Search modalities (all 200):** SRCH-02 news, 03 images, 04 videos, 05 maps
-  (Photon), 06 scholar, 07 shopping (empty—needs commercial engine), 08 code,
+  (Photon), 06 scholar, 08 code,
   09 social, 10 archive (Wayback/CommonCrawl), 11 darkweb (Ahmia via Tor). PASS.
 - **Search options:** SRCH-13 fallback, 15 force-engine (only searxng), 18 dedup
   (15/15 unique), 19 pagination (distinct pages), 23 cache-hit (`cached:true`),
@@ -184,7 +184,6 @@ Base: `GET /v1/search?q=…&modality=…` (and `POST /v1/search`). One case per 
 | SRCH-04 | Videos | `modality=videos` | 200; video results (playable url) | P1 | API | — |
 | SRCH-05 | Maps | `modality=maps&q=coffee in San Ramon` | 200; places with lat/lon (Photon) | P1 | API | — |
 | SRCH-06 | Scholar | `modality=scholar` | 200; scholarly results or clean empty | P2 | API | — |
-| SRCH-07 | Shopping | `modality=shopping` | 200; results or clean empty | P2 | API | — |
 | SRCH-08 | Code | `modality=code` | 200; code/repo results | P2 | API | — |
 | SRCH-09 | Social | `modality=social` | 200; social results | P2 | API | — |
 | SRCH-10 | Archive | `modality=archive` | 200; Wayback/CommonCrawl snapshots (free, no key) | P1 | API | — |

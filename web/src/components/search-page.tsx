@@ -21,10 +21,9 @@ function searchErrorMessage(e: unknown): string {
 
 export const dynamic = 'force-dynamic';
 
-const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'shopping', 'code', 'social', 'archive', 'darkweb', 'semantic', 'ai'];
+const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'code', 'social', 'archive', 'darkweb', 'semantic', 'ai'];
 
 const NEEDS_KEY: Record<string, string> = {
-  shopping: 'Shopping needs a SerpApi/Serper key. Add one under Account → Provider Keys.',
 };
 const ARCHIVE_HINT =
   'Archive (Common Crawl) searches by domain or URL prefix, not keywords — try a domain like "example.com".';

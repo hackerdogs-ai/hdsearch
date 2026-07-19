@@ -38,12 +38,12 @@ const ACCESS_BADGE: Record<string, string> = {
   commercial: 'bg-purple-100 text-purple-700',
 };
 
-const SEARCH_MODALITIES = ['web', 'news', 'images', 'videos', 'scholar', 'social', 'code', 'maps', 'archive', 'darkweb', 'shopping'] as const;
+const SEARCH_MODALITIES = ['web', 'news', 'images', 'videos', 'scholar', 'social', 'code', 'maps', 'archive', 'darkweb'] as const;
 
 const MODALITY_LABEL: Record<string, string> = {
   web: 'Web', news: 'News', images: 'Images', videos: 'Videos',
   scholar: 'Scholar', social: 'Social', code: 'Code', maps: 'Maps',
-  archive: 'Archive', darkweb: 'Dark Web', shopping: 'Shopping',
+  archive: 'Archive', darkweb: 'Dark Web',
   crawl: 'Crawlers',
 };
 

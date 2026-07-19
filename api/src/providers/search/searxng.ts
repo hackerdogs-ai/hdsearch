@@ -14,7 +14,6 @@ const CATEGORY: Record<Modality, string> = {
   maps: 'map',
   scholar: 'science',
   places: 'map',
-  shopping: 'general',
   code: 'it',
   social: 'social media',
   archive: 'general',

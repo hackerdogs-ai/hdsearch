@@ -11,7 +11,6 @@ const PATH: Record<string, { path: string; key: string; norm: Modality }> = {
   images: { path: 'images', key: 'images', norm: 'images' },
   videos: { path: 'videos', key: 'videos', norm: 'videos' },
   places: { path: 'places', key: 'places', norm: 'places' },
-  shopping: { path: 'shopping', key: 'shopping', norm: 'shopping' },
   scholar: { path: 'scholar', key: 'organic', norm: 'scholar' },
 };
 
@@ -21,12 +20,12 @@ export const serper: SearchProvider = {
   category: 'search',
   accessType: 'freemium',
   defaultPriority: 220,
-  modalities: ['web', 'news', 'images', 'videos', 'places', 'shopping', 'scholar'],
+  modalities: ['web', 'news', 'images', 'videos', 'places', 'scholar'],
   requiresKeys: ['serper'],
   cacheTtlSec: 3600,
   docsUrl: 'https://serper.dev',
   endpoint: 'POST https://google.serper.dev/{search|news|images|videos} {q}',
-  description: 'Fast LLM-optimized Google SERP: organic, news, images, videos, places, shopping.',
+  description: 'Fast LLM-optimized Google SERP: organic, news, images, videos, places.',
   async search(req: SearchRequest, ctx: ProviderContext): Promise<NormalizedResult[]> {
     const key = await ctx.getKey('serper');
     if (!key) throw new ProviderError('serper', 'no serper api key configured', 401, false);

@@ -16,7 +16,6 @@ export const SEARCH_MODALITIES = [
   'videos',
   'maps',
   'scholar',
-  'shopping',
   'code',
   'social',
   'archive',

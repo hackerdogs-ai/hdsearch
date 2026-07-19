@@ -13,8 +13,8 @@ Search Provider,Wikipedia,wikipedia,Free External,No,Wikipedia article search vi
 Search Provider,Wayback Machine,wayback,Free External,No,Internet Archive historical snapshots. Priority 300
 Search Provider,Common Crawl,commoncrawl,Free External,No,Petabyte-scale web archive index search. Priority 310
 Search Provider,Brave Search,brave,Commercial,Yes (brave),Web/news/images/videos search API. Priority 220
-Search Provider,Serper.dev,serper,Commercial,Yes (serper),"Google SERP API — web, news, images, videos, places, shopping, scholar"
-Search Provider,SerpAPI,serpapi,Commercial,Yes (serpapi),"Multi-engine SERP API — web, news, images, videos, scholar, shopping, places"
+Search Provider,Serper.dev,serper,Commercial,Yes (serper),"Google SERP API — web, news, images, videos, places, scholar"
+Search Provider,SerpAPI,serpapi,Commercial,Yes (serpapi),"Multi-engine SERP API — web, news, images, videos, scholar, places"
 Search Provider,Tavily AI Search,tavily,Commercial,Yes (tavily),AI-optimized search API for LLM context. Priority 230
 Search Provider,Exa Neural Search,exa,Commercial,Yes (exa),Neural/semantic web search. Priority 240
 Search Provider,Kagi Search,kagi,Commercial,Yes (kagi),"Premium independent search — web, news, images, videos. Priority 245"

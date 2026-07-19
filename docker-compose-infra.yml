@@ -129,13 +129,19 @@ services:
     shm_size: 2gb
     networks: [hdsearchnet]
 
+  # Tor SOCKS proxy for .onion darkweb search.
+  #
+  # NOT dperson/torproxy: that image was last built in 2021 and ships Tor
+  # 0.4.4.8, whose baked-in directory-authority keys are now stale. It fails
+  # every consensus fetch with "Consensus not signed by sufficient number of
+  # requested authorities" and never gets past 30% bootstrap, so darkweb search
+  # silently returned nothing. Recreating the container cannot fix that — the
+  # binary itself is too old. Pin a maintained image and check `tor --version`
+  # before swapping this again.
   hds-tor:
-    image: dperson/torproxy:latest
+    image: osminogin/tor-simple:latest
     container_name: hds-tor
     restart: unless-stopped
-    environment:
-      - TOR_NewCircuitPeriod=600
-      - TOR_MaxCircuitDirtiness=600
     networks: [hdsearchnet]
 
 volumes:

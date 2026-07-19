@@ -4,7 +4,7 @@ import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
-const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'shopping', 'code', 'social', 'archive', 'darkweb'];
+const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'code', 'social', 'archive', 'darkweb'];
 
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams;

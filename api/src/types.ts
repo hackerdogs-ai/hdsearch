@@ -14,7 +14,6 @@ export const MODALITIES = [
   'maps',
   'scholar',
   'places',
-  'shopping',
   'code',
   'social',
   'archive',

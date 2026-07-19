@@ -6,7 +6,7 @@ import { SearchBox } from '@/components/search-box';
 import { aiSearchHref } from '@/lib/ai-routes';
 import { searchHref } from '@/lib/search-routes';
 
-const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'shopping', 'code', 'social', 'archive', 'darkweb', 'semantic', 'ai'];
+const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'code', 'social', 'archive', 'darkweb', 'semantic', 'ai'];
 
 export const dynamic = 'force-dynamic';
 

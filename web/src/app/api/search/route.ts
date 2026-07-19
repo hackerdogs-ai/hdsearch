@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 /** High/Medium aggregate search can fan out to several engines (~6s+). */
 export const maxDuration = 60;
 
-const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'shopping', 'code', 'social', 'archive', 'darkweb'];
+const MODALITIES = ['web', 'news', 'images', 'videos', 'maps', 'scholar', 'places', 'code', 'social', 'archive', 'darkweb'];
 
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams;

@@ -8,7 +8,7 @@ import { searchHref } from '@/lib/search-routes';
 import { RecentsDropdown } from './recents-dropdown';
 
 const MODALITIES = [
-  'web', 'news', 'images', 'videos', 'maps', 'scholar', 'shopping', 'code', 'social', 'archive', 'darkweb', 'ai',
+  'web', 'news', 'images', 'videos', 'maps', 'scholar', 'code', 'social', 'archive', 'darkweb', 'ai',
 ];
 
 // The default home search box + the results-page search bar. Navigates to `/`

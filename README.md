@@ -30,7 +30,7 @@ Because I was tired of paying subscriptions and credits to all these search prov
 ## ✨ Features
 
 - **🔎 Meta-search across 20+ engines** — [SearXNG](https://github.com/searxng/searxng), [OpenSERP](https://github.com/karust/openserp) (Google/Yandex/Baidu/Bing), [DuckDuckGo](https://duckduckgo.com), [Wikipedia](https://www.mediawiki.org/wiki/API:REST_API), and more. Prioritized **fallback** (free/self-hosted first) or **aggregate** mode with cross-engine **dedup** and **facets**.
-- **🗂️ 12 modalities** — web, news, images, videos, **maps**, scholar, shopping, code, social, **web archive** ([Wayback](https://archive.org/help/wayback_api.php) + [Common Crawl](https://commoncrawl.org/)), and **darkweb** ([Ahmia](https://github.com/ahmia/ahmia-site) over [Tor](https://www.torproject.org/)).
+- **🗂️ 11 modalities** — web, news, images, videos, **maps**, scholar, code, social, **web archive** ([Wayback](https://archive.org/help/wayback_api.php) + [Common Crawl](https://commoncrawl.org/)), and **darkweb** ([Ahmia](https://github.com/ahmia/ahmia-site) over [Tor](https://www.torproject.org/)).
 - **🕷️ Crawl** — fetch any URL to clean markdown / links / text via self-hosted [Crawl4AI](https://github.com/unclecode/crawl4ai) + a [Browserless](https://github.com/browserless/browserless) headless-Chrome fallback for JS pages.
 - **🧠 Vector search + RAG** — index documents (24h TTL) and run semantic KNN via Redis **[RediSearch](https://github.com/RediSearch/RediSearch)** (HNSW), with a brute-force fallback. Upload your own files → parse → embed → retrieve, with **citations**.
 - **🤖 AI Search (agentic)** — a chat that plans and calls tools (`search`, `maps`, `crawl`, `archive`, `chart`, `weather`, render UI) and streams the answer. Works with **local [Ollama](https://github.com/ollama/ollama) (no API key, $0)** or any commercial model you add.
@@ -362,7 +362,7 @@ stored AES-256-GCM encrypted; nothing leaves your infrastructure.
 |---|---|---|
 | [Brave Search API](https://brave.com/search/api/) | yes | Independent index (not Google-derived) |
 | [Serper](https://serper.dev) | yes | Fast Google SERP; most generous free tier |
-| [SerpApi](https://serpapi.com/search-api) | limited | Broadest engine coverage — shopping, scholar, places |
+| [SerpApi](https://serpapi.com/search-api) | limited | Broadest engine coverage — scholar, places |
 | [Tavily](https://docs.tavily.com) | yes | Search built for LLM/RAG pipelines |
 | [Exa](https://docs.exa.ai) | yes | Neural/semantic web search |
 | [Kagi Search API](https://help.kagi.com/kagi/api/search.html) | no | Premium ad-free index |
