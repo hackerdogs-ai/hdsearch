@@ -163,9 +163,35 @@ header = (
     f"> Images: `{ns}/hdsearch:api` (REST API + MCP server) and `{ns}/hdsearch:web` (Next.js UI). "
     f"Run them together with the compose files in the repo.\n\n---\n\n"
 )
-full = header + readme
-if len(full) > 25000:                      # Hub caps full_description
-    full = full[:24800].rsplit("\n", 1)[0] + "\n\n…continued at https://github.com/hackerdogs-ai/hdsearch\n"
+LIMIT = 25000                              # Hub caps full_description
+tail = "\n\n---\n\nFull README, development guide and roadmap: https://github.com/hackerdogs-ai/hdsearch\n"
+
+def drop_section(md, heading):
+    """Remove one '## ...' section (up to the next '## ' or EOF)."""
+    i = md.find(heading)
+    if i < 0:
+        return md
+    j = md.find("\n## ", i + len(heading))
+    return md[:i] + (md[j + 1:] if j > 0 else "")
+
+# Sections a Docker Hub reader does not need — dropped first, in this order, so
+# the parts that matter to someone pulling the image (quickstart, providers,
+# credits) survive rather than being blind-truncated off the end.
+HUB_OMIT = ["## 🛠️ Development", "## 🐳 Publish your own images",
+            "## 🗺️ Roadmap", "## 🤝 Contributing"]
+
+body = readme
+for h in HUB_OMIT:
+    if len(header) + len(body) + len(tail) <= LIMIT:
+        break
+    body = drop_section(body, h)
+
+full = header + body
+if len(full) + len(tail) > LIMIT:          # still too long → cut on a heading
+    cut_at = full[: LIMIT - len(tail)]
+    k = cut_at.rfind("\n## ")
+    full = cut_at[:k] if k > 0 else cut_at.rsplit("\n", 1)[0]
+full = full.rstrip() + tail
 
 try:
     jwt = post("https://hub.docker.com/v2/users/login/", {"username": user, "password": token}, {})["token"]

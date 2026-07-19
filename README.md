@@ -186,8 +186,38 @@ A chat that **plans, calls tools, and streams** a cited answer. Tools:
 `hd_weather`, and `hd_render` (rich UI components).
 
 - **Local & free by default:** point it at a host-run **[Ollama](https://ollama.com)** — models are auto-discovered from whatever you've pulled, no API key, $0. The compose already wires `host.docker.internal:11434`.
-- **Or any commercial model** (Anthropic, OpenAI, Google, xAI, Groq, Bedrock, Azure, OpenRouter) — add the key in the UI and pick the model from the dropdown.
+- **Or any commercial model** — add the key in the UI and pick the model from the dropdown.
 - **RAG:** upload files to a chat → they're parsed, embedded, indexed, and retrieved to ground the answer with citations.
+- **Tokens, not credits:** each answer reports the tokens it actually consumed. No metering, no quotas, no per-request billing by hdsearch.
+
+### LLM providers
+
+Ten providers ship in the registry. **Only Ollama is required for AI Search to
+work** — everything else is optional and needs your own key, entered in the UI and
+stored AES-256-GCM encrypted.
+
+| Provider | Type | Key field | Docs |
+|---|---|---|---|
+| [Ollama](https://github.com/ollama/ollama) | self-hosted, free | none | [API docs](https://github.com/ollama/ollama/blob/main/docs/api.md) |
+| [Anthropic](https://www.anthropic.com) | commercial | `anthropic` | [docs](https://docs.anthropic.com) |
+| [OpenAI](https://openai.com) | commercial | `openai` | [docs](https://platform.openai.com/docs) |
+| [Google (Gemini)](https://ai.google.dev) | commercial | `google` | [docs](https://ai.google.dev/gemini-api/docs) |
+| [xAI (Grok)](https://x.ai) | commercial | `xai` | [docs](https://docs.x.ai) |
+| [Groq](https://groq.com) | commercial | `groq` | [docs](https://console.groq.com/docs) |
+| [Mistral AI](https://mistral.ai) | commercial | `mistral` | [docs](https://docs.mistral.ai) |
+| [OpenRouter](https://openrouter.ai) | commercial (gateway) | `openrouter` | [docs](https://openrouter.ai/docs) |
+| [AWS Bedrock](https://aws.amazon.com/bedrock) | commercial | `aws_access_key` | [docs](https://docs.aws.amazon.com/bedrock) |
+| [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service) | commercial | `azure_openai` | [docs](https://learn.microsoft.com/en-us/azure/ai-services/openai) |
+
+**Add your own.** *System Admin → LLM providers* takes any **OpenAI-compatible**
+endpoint — [vLLM](https://github.com/vllm-project/vllm), [LM Studio](https://lmstudio.ai),
+[llama.cpp server](https://github.com/ggml-org/llama.cpp), [Together](https://www.together.ai),
+[Fireworks](https://fireworks.ai), [DeepSeek](https://www.deepseek.com), [Perplexity](https://docs.perplexity.ai)
+— by base URL alone, no code change. Register its models under *AI Search models* on
+the same page. Both are stored in Postgres and take effect without a restart.
+
+Model metadata (context window, max output, tool/vision/thinking support) is admin-editable,
+so you can add a model the day it ships rather than waiting on a release.
 
 ## 🔌 MCP server
 
@@ -339,6 +369,17 @@ stored AES-256-GCM encrypted; nothing leaves your infrastructure.
 | [Google Programmable Search](https://developers.google.com/custom-search/v1/overview) | limited | Official Google CSE |
 | [Jina Reader](https://jina.ai/reader/) | yes | URL → markdown |
 | [Intelligence X](https://intelx.io/product) | no | Darkweb / leak archive |
+
+### LLM providers (AI Search)
+
+Listed with key fields and docs in [AI Search → LLM providers](#llm-providers).
+[Ollama](https://github.com/ollama/ollama) (MIT) is the only one needed for a
+$0 setup; [Anthropic](https://www.anthropic.com), [OpenAI](https://openai.com),
+[Google](https://ai.google.dev), [xAI](https://x.ai), [Groq](https://groq.com),
+[Mistral](https://mistral.ai), [OpenRouter](https://openrouter.ai),
+[AWS Bedrock](https://aws.amazon.com/bedrock) and
+[Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service)
+are optional commercial APIs. Any OpenAI-compatible endpoint can be added at runtime.
 
 ### Frameworks & libraries
 
