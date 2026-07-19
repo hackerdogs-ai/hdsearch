@@ -41,12 +41,38 @@ function gravatar(email: string): string {
   return `https://www.gravatar.com/avatar/${Buffer.from(email).toString('hex').slice(0, 32)}?d=identicon`;
 }
 
-/** First-run when there are no local accounts yet (no password-backed users). */
-export async function isSetupRequired(): Promise<boolean> {
+/** Is there at least one administrator? An instance without one is unmanageable. */
+export async function adminExists(): Promise<boolean> {
+  const rows = await tryQuery<{ n: string }>(
+    `select count(*)::int as n from ${SCHEMA}.users where role = 'admin'`,
+  );
+  return Number(rows[0]?.n || 0) > 0;
+}
+
+/** Any password-backed (local) account at all. */
+async function localUserExists(): Promise<boolean> {
   const rows = await tryQuery<{ n: string }>(
     `select count(*)::int as n from ${SCHEMA}.users where password_hash is not null`,
   );
-  return Number(rows[0]?.n || 0) === 0;
+  return Number(rows[0]?.n || 0) > 0;
+}
+
+/**
+ * First run = a genuinely fresh instance: no administrator AND no local accounts.
+ * The create-admin screen is unauthenticated, so it must only ever appear on an
+ * empty instance — if accounts already exist, letting any visitor claim admin
+ * would be privilege escalation. That case is adminRecoveryRequired() instead.
+ */
+export async function isSetupRequired(): Promise<boolean> {
+  return !(await adminExists()) && !(await localUserExists());
+}
+
+/**
+ * Accounts exist but none is an admin — the instance is stranded. Recovery goes
+ * through HDSEARCH_ADMIN_EMAIL/PASSWORD (server access), never a public form.
+ */
+export async function adminRecoveryRequired(): Promise<boolean> {
+  return !(await adminExists()) && (await localUserExists());
 }
 
 // GET /v1/auth/status — drives the web login vs. first-run-setup screens.
@@ -58,6 +84,8 @@ authLocalRoutes.get('/status', async (c) => {
     setupRequired,
     openSignup: signupAllowed(),
     emailEnabled: await emailEnabled(),
+    // Stranded instance: surface recovery instructions instead of a claim form.
+    adminRecoveryRequired: await adminRecoveryRequired(),
   });
 });
 

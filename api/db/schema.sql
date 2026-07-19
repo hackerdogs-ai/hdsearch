@@ -186,6 +186,51 @@ CREATE TABLE IF NOT EXISTS hd_search.llm_models (
 CREATE INDEX IF NOT EXISTS llm_models_provider_idx ON hd_search.llm_models (provider_id);
 
 -- ---------------------------------------------------------------------------
+-- Guard: never leave the instance without an administrator.
+--
+-- There is no application path that deletes users or changes roles, so the only
+-- way to lose the last admin is direct SQL (or a bad restore) — which is exactly
+-- how it happens. Enforcing this in the database covers every caller, including
+-- psql. Deliberate removal is still possible with an explicit opt-out:
+--     SET LOCAL hd_search.allow_admin_removal = 'on';
+-- (A full `docker compose down -v` volume wipe is unaffected.)
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION hd_search.protect_last_admin() RETURNS trigger AS $fn$
+DECLARE
+  remaining INT;
+BEGIN
+  -- Explicit operator override for intentional teardown.
+  IF current_setting('hd_search.allow_admin_removal', true) = 'on' THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  -- Only rows that are currently admin, and only changes that drop that role.
+  IF OLD.role IS DISTINCT FROM 'admin' THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.role = 'admin' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT count(*) INTO remaining
+    FROM hd_search.users WHERE role = 'admin' AND id <> OLD.id;
+
+  IF remaining = 0 THEN
+    RAISE EXCEPTION
+      'refusing to remove the last administrator (%). Promote another admin first, or set hd_search.allow_admin_removal to override.',
+      OLD.id USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$fn$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS users_protect_last_admin ON hd_search.users;
+CREATE TRIGGER users_protect_last_admin
+  BEFORE DELETE OR UPDATE OF role ON hd_search.users
+  FOR EACH ROW EXECUTE FUNCTION hd_search.protect_last_admin();
+
+-- ---------------------------------------------------------------------------
 -- Single-use auth tokens: password reset + magic-link sign-in.
 -- Only the SHA-256 of the token is stored, so a database leak cannot be replayed
 -- to take over an account. Rows are consumed atomically (see auth-tokens.ts).

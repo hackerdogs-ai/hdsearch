@@ -5,7 +5,7 @@ import { config } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
-type AuthStatus = { localAuthEnabled: boolean; setupRequired: boolean; openSignup: boolean; emailEnabled?: boolean };
+type AuthStatus = { localAuthEnabled: boolean; setupRequired: boolean; openSignup: boolean; emailEnabled?: boolean; adminRecoveryRequired?: boolean };
 
 // Ask the API whether local auth is on and whether this is first-run (no admin yet).
 async function getAuthStatus(): Promise<AuthStatus | null> {
@@ -47,6 +47,16 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
           <div className="mb-6 flex justify-center">
             <Brand />
           </div>
+          {status?.adminRecoveryRequired && (
+            <div className="card mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">This instance has no administrator</p>
+              <p className="mt-1">
+                Sign-in still works, but System Administration is unreachable. To restore access, set{' '}
+                <code>HDSEARCH_ADMIN_EMAIL</code> and <code>HDSEARCH_ADMIN_PASSWORD</code> on the API and restart it —
+                the matching account is created or promoted on boot.
+              </p>
+            </div>
+          )}
           <AuthCard firstRun={firstRun} openSignup={!!status?.openSignup} emailEnabled={!!status?.emailEnabled} error={errMsg} />
         </div>
       </div>

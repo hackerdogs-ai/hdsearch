@@ -80,26 +80,50 @@ async function bootstrapAdminKey(): Promise<void> {
   log.info('bootstrap admin API key installed');
 }
 
-/** Create the local admin account from HDSEARCH_ADMIN_EMAIL/PASSWORD on first run
- * (headless/Docker bootstrap). No-op once any local account exists. */
+/** Seed the local admin from HDSEARCH_ADMIN_EMAIL/PASSWORD (headless/Docker
+ * bootstrap). Runs whenever the instance has NO administrator, so it doubles as
+ * the recovery lever for a stranded instance: set the two vars, restart, and the
+ * matching account is created or promoted. Requires server access by design. */
 async function bootstrapAdminUser(): Promise<void> {
   if (!env.adminEmail || !env.adminPassword) return;
-  const { isSetupRequired, localUserId } = await import('./routes/auth-local.js');
-  if (!(await isSetupRequired())) return;
+  const { adminExists, localUserId } = await import('./routes/auth-local.js');
+  if (await adminExists()) return;
   const { hashPassword, validatePassword } = await import('./password.js');
   const pwErr = validatePassword(env.adminPassword, env.adminEmail);
   if (pwErr) {
     log.warn('HDSEARCH_ADMIN_PASSWORD rejected; skipping admin bootstrap', { reason: pwErr });
     return;
   }
-  const id = localUserId(env.adminEmail);
-  await tryQuery(
-    `insert into ${SCHEMA}.users (id, email, name, plan, role, password_hash, updated_at)
-       values ($1,$2,$3,'free','admin',$4, now())
-     on conflict (id) do update set role='admin', password_hash=excluded.password_hash, updated_at=now()`,
-    [id, env.adminEmail, env.adminEmail.split('@')[0], hashPassword(env.adminPassword)],
-  );
-  log.info('bootstrapped local admin account from env', { email: env.adminEmail });
+  const pwHash = hashPassword(env.adminPassword);
+  try {
+    // Promote by EMAIL first: an existing account may carry an id from another
+    // scheme (external IdP, older derivation), and matching on the derived id
+    // would try to insert a duplicate email instead of promoting. This also
+    // (re)sets the password — the point of the lever is to restore access.
+    const promoted = await query<{ id: string }>(
+      `update ${SCHEMA}.users
+          set role='admin', password_hash=$2, updated_at=now()
+        where lower(email)=lower($1)
+      returning id`,
+      [env.adminEmail, pwHash],
+    );
+    if (promoted.length) {
+      log.info('promoted existing account to admin from env', { email: env.adminEmail, userId: promoted[0]!.id });
+      return;
+    }
+    await query(
+      `insert into ${SCHEMA}.users (id, email, name, plan, role, password_hash, updated_at)
+         values ($1,$2,$3,'free','admin',$4, now())
+       on conflict (id) do update set role='admin', password_hash=excluded.password_hash, updated_at=now()`,
+      [localUserId(env.adminEmail), env.adminEmail, env.adminEmail.split('@')[0], pwHash],
+    );
+    log.info('bootstrapped local admin account from env', { email: env.adminEmail });
+  } catch (e) {
+    // Never claim success on failure — this is the last-resort recovery path.
+    log.error('admin bootstrap FAILED — instance may still have no administrator', {
+      email: env.adminEmail, error: (e as Error).message,
+    });
+  }
 }
 
 async function main() {
