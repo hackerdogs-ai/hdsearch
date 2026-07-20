@@ -24,6 +24,7 @@ const ERROR_LABELS: Record<string, string> = {
   registration_closed: 'Registration is closed — ask an admin to create your account.',
   conflict: 'An account with that email already exists. Try signing in.',
   missing_fields: 'Please enter your email and password.',
+  terms_required: 'Please accept the Terms of Service to create an account.',
   api_unreachable: 'Could not reach the server. Is the API running?',
   bad_request: 'Please check your details and try again.',
 };

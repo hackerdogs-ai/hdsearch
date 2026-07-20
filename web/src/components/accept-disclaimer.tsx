@@ -6,7 +6,7 @@ import { TERMS_VERSION } from '@/lib/terms-meta';
 import { POST_AUTH_LANDING_PATH } from '@/lib/routes';
 
 // Accept the disclaimer (records consent via the BFF) and continue to the app.
-export function AcceptDisclaimer() {
+export function AcceptDisclaimer({ next }: { next?: string }) {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,11 @@ export function AcceptDisclaimer() {
         body: JSON.stringify({ termsVersion: TERMS_VERSION }),
       });
       if (!res.ok) throw new Error('could not record acceptance');
-      window.location.href = POST_AUTH_LANDING_PATH;
+      // Return to the page that triggered the gate (e.g. Manage), not the
+      // search screen. Guarded to same-site paths by the caller.
+      window.location.href = next && next.startsWith('/') && !next.startsWith('//')
+        ? next
+        : POST_AUTH_LANDING_PATH;
     } catch (e: any) {
       setError(e.message);
       setBusy(false);

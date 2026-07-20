@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { TERMS_VERSION } from '@/lib/terms-meta';
 
 const MIN_LENGTH = 12;
 const PASSPHRASE_LENGTH = 16;
@@ -76,11 +77,15 @@ export function AuthCard({
   const [magic, setMagic] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
   const [magicBusy, setMagicBusy] = useState(false);
+  // Terms are accepted here, at signup, so the post-login /disclaimer
+  // interstitial never fires for new accounts. Reset when toggling views so
+  // switching sign-in <-> sign-up can't carry an acceptance across.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const isRegister = firstRun || signup;
 
   const title = firstRun ? 'Create your admin account' : signup ? 'Create your account' : 'Sign in to hdsearch';
   const subtitle = firstRun
-    ? 'This is the first run — the account you create becomes the administrator.'
+    ? null
     : signup
       ? 'Sign up with your email and a password.'
       : 'Access your dashboard, API keys and usage.';
@@ -175,11 +180,13 @@ export function AuthCard({
   return (
     <div className="card w-full max-w-sm p-8">
       <h1 className="text-center text-xl font-bold text-ink-900">{title}</h1>
-      <p className="mt-1 text-center text-sm text-ink-500">{subtitle}</p>
-      <p className="mt-3 text-center text-sm text-ink-500">
-        By continuing you agree to our{' '}
-        <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>.
-      </p>
+      {subtitle && <p className="mt-1 text-center text-sm text-ink-500">{subtitle}</p>}
+      {!isRegister && (
+        <p className="mt-3 text-center text-sm text-ink-500">
+          By continuing you agree to our{' '}
+          <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>.
+        </p>
+      )}
 
       {(clientError || error) && (
         <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-center text-sm text-red-700">{clientError || error}</p>
@@ -235,7 +242,33 @@ export function AuthCard({
           </div>
         )}
 
-        <button type="submit" className="btn-primary w-full">
+        {isRegister && (
+          <label className="flex items-start gap-2 pt-1 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              name="acceptTerms"
+              value="1"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              I have read and agree to the{' '}
+              <Link href="/terms" target="_blank" className="text-brand-600 hover:underline">
+                Terms of Service
+              </Link>
+              .
+            </span>
+          </label>
+        )}
+        <input type="hidden" name="termsVersion" value={TERMS_VERSION} />
+
+        <button
+          type="submit"
+          disabled={isRegister && !acceptedTerms}
+          title={isRegister && !acceptedTerms ? 'Accept the Terms of Service to continue' : undefined}
+          className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
+        >
           {firstRun ? 'Create admin account' : signup ? 'Create account' : 'Sign in'}
         </button>
       </form>

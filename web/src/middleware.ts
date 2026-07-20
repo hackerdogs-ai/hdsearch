@@ -21,7 +21,18 @@ export async function middleware(req: NextRequest) {
   } catch {
     return NextResponse.redirect(new URL('/setup', req.url));
   }
-  return NextResponse.next();
+  return withPathname(req);
+}
+
+/**
+ * Server components cannot read the current pathname, so expose it as a header.
+ * The disclaimer gate needs it to send the user back where they were headed
+ * instead of dumping them on the search page.
+ */
+function withPathname(req: NextRequest) {
+  const headers = new Headers(req.headers);
+  headers.set('x-pathname', req.nextUrl.pathname + req.nextUrl.search);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

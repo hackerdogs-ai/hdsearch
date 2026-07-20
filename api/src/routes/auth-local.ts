@@ -18,6 +18,7 @@ import { requireAuth } from '../auth.js';
 import { rateLimit } from '../ratelimit.js';
 import { emailEnabled, sendMail, maskEmail } from '../email.js';
 import { issueToken, peekToken, consumeToken, revokeTokens, TOKEN_TTL_SEC } from '../auth-tokens.js';
+import { recordDisclaimer } from '../consent.js';
 import { log, errFields } from '../logger.js';
 
 export const authLocalRoutes = new Hono();
@@ -93,6 +94,11 @@ const RegisterSchema = z.object({
   email: z.string().email(),
   name: z.string().max(200).optional(),
   password: z.string().min(1),
+  // Terms are accepted at signup (checkbox gates the submit button), so the
+  // separate post-login /disclaimer interstitial never fires for new accounts.
+  // Optional here: accounts created by an admin out-of-band still get gated.
+  acceptTerms: z.boolean().optional(),
+  termsVersion: z.string().max(64).optional(),
 });
 
 // POST /v1/auth/register — create a local account. First account = admin.
@@ -141,7 +147,19 @@ authLocalRoutes.post('/register', async (c) => {
     log.warn('auto-create API key failed (non-fatal)', { userId: id, ...errFields(e) });
   }
 
-  log.info('local account created', { userId: id, role });
+  // Record consent here rather than in the web BFF: the session cookie the BFF
+  // sets is not readable within the same request, so doing it there would race.
+  // Recording it with account creation also means the API enforces the same rule
+  // for any client, not just our UI.
+  if (parsed.data.acceptTerms) {
+    try {
+      await recordDisclaimer(id, parsed.data.termsVersion);
+    } catch (e) {
+      log.warn('recording signup consent failed (user will be gated)', { userId: id, ...errFields(e) });
+    }
+  }
+
+  log.info('local account created', { userId: id, role, termsAccepted: !!parsed.data.acceptTerms });
   return c.json({ user: { sub: id, email, name, role, picture }, ...(apiKey ? { apiKey } : {}) });
 });
 

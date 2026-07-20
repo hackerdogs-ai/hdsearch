@@ -11,12 +11,19 @@ import { getTermsMarkdown } from '@/lib/terms';
 export const dynamic = 'force-dynamic';
 
 // One-time terms / disclaimer gate, shown after first sign-in until accepted.
-export default async function DisclaimerPage() {
+export default async function DisclaimerPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
   const user = getSession();
   if (!user) redirect('/login');
   if (user.ev === false) redirect('/verify-email');
+  // Only same-site absolute paths, so `?next=` can never become an open redirect.
+  const raw = searchParams?.next || '';
+  const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : POST_AUTH_LANDING_PATH;
   const accepted = await isDisclaimerAccepted(user);
-  if (accepted) redirect(POST_AUTH_LANDING_PATH);
+  if (accepted) redirect(next);
 
   const terms = getTermsMarkdown();
 
@@ -37,7 +44,7 @@ export default async function DisclaimerPage() {
         </div>
 
         <div className="mt-6">
-          <AcceptDisclaimer />
+          <AcceptDisclaimer next={next} />
         </div>
       </div>
     </div>

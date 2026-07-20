@@ -22,7 +22,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(appPath(req, '/login?error=missing_fields'), { status: 303 });
   }
 
-  const body = mode === 'register' ? { email, name, password } : { email, password };
+  // The signup form gates its submit button on this checkbox, but that is only a
+  // client-side control — re-check it here so a hand-rolled POST cannot create an
+  // account without consent. The API records it alongside the user row.
+  const acceptTerms = String(form.get('acceptTerms') || '') === '1';
+  const termsVersion = String(form.get('termsVersion') || '') || undefined;
+  if (mode === 'register' && !acceptTerms) {
+    return NextResponse.redirect(appPath(req, '/login?error=terms_required'), { status: 303 });
+  }
+
+  const body =
+    mode === 'register' ? { email, name, password, acceptTerms, termsVersion } : { email, password };
   let res: Response;
   try {
     res = await fetch(`${config.apiUrl}/v1/auth/${mode}`, {
