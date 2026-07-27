@@ -8,8 +8,7 @@ import { getRecents, clearRecents, type Recent } from '@/lib/recents';
 import { SearchModalityIcon } from '@/components/search-modality-icon';
 
 // Tiered search history. Browser tier (localStorage) works for everyone; the
-// server tier is the signed-in Redis 3-day window (paid users also get a durable
-// S3 archive). Both are listed with one-click clear.
+// server tier is the signed-in Redis History Cache window (plus durable S3 archive).
 interface ServerEntry {
   q: string;
   modality: string;
@@ -29,20 +28,24 @@ interface AiThreadEntry {
   model?: string;
 }
 
-const TIER_LABEL: Record<string, string> = {
-  browser: 'Browser only',
-  redis: 'Synced · 3-day server history',
-  'redis+archive': 'Synced · 3-day server history + durable archive (paid)',
-};
+function tierLabel(tier: string, historyTtlSec?: number): string {
+  const days = historyTtlSec != null ? Math.max(1, Math.round(historyTtlSec / 86400)) : 3;
+  const window = days === 1 ? '1-day' : `${days}-day`;
+  if (tier === 'redis+archive') return `Synced · ${window} server history + durable archive`;
+  if (tier === 'redis') return `Synced · ${window} server history`;
+  return 'Browser only';
+}
 
 export function SearchHistoryPanel() {
   const [recents, setRecents] = useState<Recent[]>([]);
   const [server, setServer] = useState<ServerEntry[]>([]);
   const [tier, setTier] = useState<string>('browser');
+  const [historyTtlSec, setHistoryTtlSec] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
 
   const [aiThreads, setAiThreads] = useState<AiThreadEntry[]>([]);
   const [aiTier, setAiTier] = useState<string>('browser');
+  const [aiHistoryTtlSec, setAiHistoryTtlSec] = useState<number | undefined>();
   const [aiLoading, setAiLoading] = useState(true);
 
   useEffect(() => {
@@ -58,6 +61,7 @@ export function SearchHistoryPanel() {
       const j = await r.json();
       setServer(j.entries || []);
       setTier(j.tier || 'browser');
+      if (typeof j.historyTtlSec === 'number') setHistoryTtlSec(j.historyTtlSec);
     } catch {
       /* ignore */
     } finally {
@@ -70,6 +74,7 @@ export function SearchHistoryPanel() {
       const j = await r.json();
       setAiThreads(j.entries || []);
       setAiTier(j.tier || 'browser');
+      if (typeof j.historyTtlSec === 'number') setAiHistoryTtlSec(j.historyTtlSec);
     } catch {
       /* ignore */
     } finally {
@@ -127,7 +132,7 @@ export function SearchHistoryPanel() {
             <button onClick={clearServer} className="text-sm text-ink-400 hover:text-red-600">Clear</button>
           )}
         </div>
-        <p className="mt-0.5 text-sm text-ink-400">{TIER_LABEL[tier] || TIER_LABEL.browser}</p>
+        <p className="mt-0.5 text-sm text-ink-400">{tierLabel(tier, historyTtlSec)}</p>
         <ul className="mt-3 space-y-1">
           {loading && <li className="py-6 text-center text-sm text-ink-400">Loading…</li>}
           {!loading && server.length === 0 && (
@@ -167,7 +172,7 @@ export function SearchHistoryPanel() {
           <button onClick={clearAiThreads} className="text-sm text-ink-400 hover:text-red-600">Clear</button>
         )}
       </div>
-      <p className="mt-0.5 text-sm text-ink-400">{TIER_LABEL[aiTier] || TIER_LABEL.browser}</p>
+      <p className="mt-0.5 text-sm text-ink-400">{tierLabel(aiTier, aiHistoryTtlSec)}</p>
       <ul className="mt-3 space-y-1">
         {aiLoading && <li className="py-6 text-center text-sm text-ink-400">Loading…</li>}
         {!aiLoading && aiThreads.length === 0 && (

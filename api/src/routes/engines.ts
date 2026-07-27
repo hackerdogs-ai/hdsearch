@@ -15,6 +15,11 @@ import {
   getAdminCacheTtlLimits,
   normalizeCacheTtlSec,
 } from '../cache-ttl.js';
+import {
+  ALLOWED_HISTORY_TTL_SEC,
+  historyTtlOptions,
+  normalizeHistoryTtlSec,
+} from '../history-ttl.js';
 import { log, errFields } from '../logger.js';
 
 export const engineRoutes = new Hono();
@@ -45,13 +50,18 @@ engineRoutes.get('/prefs', async (c) => {
   const p = c.get('principal');
   const prefs = await getProviderPrefs(p.userId);
   const cacheTtlSec = normalizeCacheTtlSec(prefs.cacheTtlSec);
+  const historyTtlSec = normalizeHistoryTtlSec(prefs.historyTtlSec);
   const admin = getAdminCacheTtlLimits();
   return c.json({
-    prefs: { ...prefs, cacheTtlSec },
+    prefs: { ...prefs, cacheTtlSec, historyTtlSec },
     cacheTtlLimits: {
       defaultSec: admin.defaultSec,
       maxSec: admin.maxSec,
       options: cacheTtlOptions(),
+    },
+    historyTtlLimits: {
+      defaultSec: normalizeHistoryTtlSec(undefined),
+      options: historyTtlOptions(),
     },
   });
 });
@@ -63,10 +73,18 @@ const CacheTtlSchema = z.union([
   z.literal(3600),
   z.literal(86400),
 ]);
+const HistoryTtlSchema = z.union([
+  z.literal(1 * 24 * 3600),
+  z.literal(3 * 24 * 3600),
+  z.literal(7 * 24 * 3600),
+  z.literal(14 * 24 * 3600),
+  z.literal(30 * 24 * 3600),
+]);
 const PrefsSchema = z.object({
   disabled: z.array(z.string()).max(100).optional(),
   ranks: z.record(z.string(), z.number().int().min(1).max(9999)).optional(),
   cacheTtlSec: CacheTtlSchema.optional(),
+  historyTtlSec: HistoryTtlSchema.optional(),
 });
 engineRoutes.put('/prefs', async (c) => {
   const p = c.get('principal');
@@ -82,9 +100,16 @@ engineRoutes.put('/prefs', async (c) => {
         parsed.data.cacheTtlSec != null
           ? normalizeCacheTtlSec(parsed.data.cacheTtlSec)
           : normalizeCacheTtlSec(current.cacheTtlSec),
+      historyTtlSec:
+        parsed.data.historyTtlSec != null
+          ? normalizeHistoryTtlSec(parsed.data.historyTtlSec)
+          : normalizeHistoryTtlSec(current.historyTtlSec),
     };
     if (merged.cacheTtlSec != null && !allowed.has(merged.cacheTtlSec)) {
       return c.json({ error: 'bad_request', message: 'cacheTtlSec exceeds the configured maximum' }, 400);
+    }
+    if (!ALLOWED_HISTORY_TTL_SEC.has(merged.historyTtlSec)) {
+      return c.json({ error: 'bad_request', message: 'historyTtlSec is not an allowed value' }, 400);
     }
     await setProviderPrefs(p.userId, merged);
     return c.json({ ok: true, prefs: merged });

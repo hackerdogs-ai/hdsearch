@@ -31,7 +31,7 @@ export function BrandGitHub({ className = '', dark = false }: { className?: stri
       rel="noopener noreferrer"
       title="hdsearch on GitHub"
       aria-label="hdsearch on GitHub"
-      className={`inline-flex shrink-0 items-center rounded-lg p-1.5 transition hover:bg-ink-100 ${
+      className={`hidden shrink-0 items-center rounded-lg p-1.5 transition hover:bg-ink-100 sm:inline-flex ${
         dark ? 'text-white/80 hover:bg-white/10 hover:text-white' : 'text-ink-500 hover:text-ink-900'
       } ${className}`}
     >

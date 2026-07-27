@@ -25,6 +25,10 @@ import { resetForNewChat } from '@/components/ai/attachments-store';
 
 const SEARCH_SECTION_KEY = 'hds_sidebar_search_open';
 const CHAT_SECTION_KEY = 'hds_sidebar_chat_open';
+/** Fraction of the shared column given to Search when both sections are open (0–1). */
+const SEARCH_SPLIT_KEY = 'hds_sidebar_search_split';
+const DEFAULT_SEARCH_SPLIT = 0.45;
+const MIN_SECTION_PX = 96;
 const PAGE_SIZE = 10; // "Only show top 10" — grow on scroll (infinite scroll).
 
 /** Lifted sidebar search query — filters BOTH the Search and AI Search lists. */
@@ -66,6 +70,23 @@ function readSectionOpen(key: string, fallback = true): boolean {
   return fallback;
 }
 
+function clampSplit(n: number): number {
+  return Math.min(0.85, Math.max(0.15, n));
+}
+
+function readSearchSplit(): number {
+  if (typeof window === 'undefined') return DEFAULT_SEARCH_SPLIT;
+  try {
+    const raw = localStorage.getItem(SEARCH_SPLIT_KEY);
+    if (raw == null) return DEFAULT_SEARCH_SPLIT;
+    const n = Number.parseFloat(raw);
+    if (Number.isFinite(n)) return clampSplit(n);
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_SEARCH_SPLIT;
+}
+
 /** Bottom sentinel that calls onHit when scrolled into view (infinite scroll). */
 function InfiniteSentinel({ onHit, enabled }: { onHit: () => void; enabled: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -90,7 +111,8 @@ function CollapsibleSection({
   icon,
   open,
   onToggle,
-  flex = 'none',
+  fill = false,
+  style,
   className = '',
   children,
 }: {
@@ -98,26 +120,24 @@ function CollapsibleSection({
   icon: string;
   open: boolean;
   onToggle: () => void;
-  flex?: 'none' | 'fill' | 'share-sm' | 'share-lg';
+  /** When open, grow to fill remaining space (or a fixed height via style). */
+  fill?: boolean;
+  style?: React.CSSProperties;
   className?: string;
   children: React.ReactNode;
 }) {
-  const flexClass = !open
+  const layoutClass = !open
     ? 'shrink-0'
-    : flex === 'fill'
-      ? 'flex min-h-0 flex-1 flex-col'
-      : flex === 'share-sm'
-        ? 'flex max-h-[min(44vh,16rem)] min-h-0 shrink-0 flex-col md:max-h-none md:min-h-[8rem] md:flex-[3] md:shrink'
-        : flex === 'share-lg'
-          ? 'flex min-h-0 flex-1 flex-col md:min-h-[8rem] md:flex-[2]'
-          : 'shrink-0';
+    : fill
+      ? 'flex min-h-0 flex-col overflow-hidden'
+      : 'shrink-0';
 
   return (
-    <div className={`${flexClass} ${className}`.trim()}>
+    <div className={`${layoutClass} ${className}`.trim()} style={open && fill ? style : undefined}>
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-2 py-2 text-left hover:bg-white/60"
+        className="flex w-full shrink-0 items-center gap-2 px-2 py-2 text-left hover:bg-white/60"
         aria-expanded={open}
       >
         <span className="material-symbols-outlined text-lg text-ink-500">{icon}</span>
@@ -424,8 +444,17 @@ export function ExperienceLeftSidebar({
   const modalityNav = useModalityNavOptional();
   const [searchOpen, setSearchOpen] = useState(() => readSectionOpen(SEARCH_SECTION_KEY));
   const [chatOpen, setChatOpen] = useState(() => readSectionOpen(CHAT_SECTION_KEY));
+  const [searchSplit, setSearchSplit] = useState(DEFAULT_SEARCH_SPLIT);
   const [rawQuery, setRawQuery] = useState('');
   const [query, setQuery] = useState(''); // debounced, lower-cased
+  const splitColumnRef = useRef<HTMLDivElement>(null);
+  const draggingSplit = useRef(false);
+  const startY = useRef(0);
+  const startSplit = useRef(DEFAULT_SEARCH_SPLIT);
+
+  useEffect(() => {
+    setSearchSplit(readSearchSplit());
+  }, []);
 
   // Debounce the query so typing doesn't thrash the two filtered lists.
   useEffect(() => {
@@ -518,6 +547,76 @@ export function ExperienceLeftSidebar({
     });
   }, []);
 
+  const persistSplit = useCallback((ratio: number) => {
+    try {
+      localStorage.setItem(SEARCH_SPLIT_KEY, String(ratio));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const endSplitDrag = useCallback(() => {
+    if (!draggingSplit.current) return;
+    draggingSplit.current = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }, []);
+
+  const onSplitPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      draggingSplit.current = true;
+      startY.current = e.clientY;
+      startSplit.current = searchSplit;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [searchSplit],
+  );
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!draggingSplit.current) return;
+      const col = splitColumnRef.current;
+      if (!col) return;
+      const h = col.getBoundingClientRect().height;
+      if (h <= 0) return;
+      // Keep each section at least MIN_SECTION_PX tall.
+      const minRatio = Math.min(0.85, Math.max(0.15, MIN_SECTION_PX / h));
+      const maxRatio = 1 - minRatio;
+      const next = Math.min(maxRatio, Math.max(minRatio, startSplit.current + (e.clientY - startY.current) / h));
+      setSearchSplit(next);
+    };
+    const onUp = () => {
+      if (!draggingSplit.current) return;
+      setSearchSplit((r) => {
+        persistSplit(r);
+        return r;
+      });
+      endSplitDrag();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [endSplitDrag, persistSplit]);
+
+  const nudgeSplit = useCallback(
+    (delta: number) => {
+      setSearchSplit((r) => {
+        const next = clampSplit(r + delta);
+        persistSplit(next);
+        return next;
+      });
+    },
+    [persistSplit],
+  );
+
   const newSearch = useCallback(() => {
     const mod = asSearchModality(isAiModality(activeModality) ? 'web' : activeModality);
     const href = searchHref({ modality: mod });
@@ -539,8 +638,17 @@ export function ExperienceLeftSidebar({
   const searchActive = query.length > 0;
   const effSearchOpen = searchActive || searchOpen;
   const effChatOpen = searchActive || chatOpen;
-  const searchFlex = !effSearchOpen ? 'none' : effChatOpen ? 'share-sm' : 'fill';
-  const chatFlex = !effChatOpen ? 'none' : effSearchOpen ? 'share-lg' : 'fill';
+  const bothOpen = effSearchOpen && effChatOpen;
+  const searchStyle = bothOpen
+    ? { flex: `${searchSplit} 1 0%`, minHeight: MIN_SECTION_PX }
+    : effSearchOpen
+      ? { flex: '1 1 0%' }
+      : undefined;
+  const chatStyle = bothOpen
+    ? { flex: `${1 - searchSplit} 1 0%`, minHeight: MIN_SECTION_PX }
+    : effChatOpen
+      ? { flex: '1 1 0%' }
+      : undefined;
 
   return (
     <SidebarQueryContext.Provider value={query}>
@@ -558,7 +666,7 @@ export function ExperienceLeftSidebar({
               onChange={(e) => setRawQuery(e.target.value)}
               placeholder="Search chats…"
               aria-label="Search chats"
-              className="w-full rounded-lg border border-ink-200 bg-white py-1.5 pl-8 pr-7 text-sm text-ink-700 outline-none placeholder:text-ink-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-ink-200 bg-white py-1.5 pl-8 pr-7 text-xs text-ink-700 outline-none placeholder:text-ink-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
             />
             {rawQuery ? (
               <button
@@ -583,8 +691,15 @@ export function ExperienceLeftSidebar({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <CollapsibleSection title="Search" icon="search_activity" open={effSearchOpen} onToggle={toggleSearch} flex={searchFlex}>
+        <div ref={splitColumnRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <CollapsibleSection
+            title="Search"
+            icon="search_activity"
+            open={effSearchOpen}
+            onToggle={toggleSearch}
+            fill={effSearchOpen}
+            style={searchStyle}
+          >
             {!searchActive ? (
               <button
                 type="button"
@@ -599,13 +714,40 @@ export function ExperienceLeftSidebar({
             </div>
           </CollapsibleSection>
 
+          {bothOpen ? (
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize Search and AI Search"
+              aria-valuenow={Math.round(searchSplit * 100)}
+              aria-valuemin={15}
+              aria-valuemax={85}
+              tabIndex={0}
+              onPointerDown={onSplitPointerDown}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  nudgeSplit(-0.04);
+                }
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  nudgeSplit(0.04);
+                }
+              }}
+              className="group relative z-10 flex h-3 shrink-0 cursor-row-resize items-center justify-center touch-none border-t border-ink-100"
+            >
+              <span className="h-1 w-10 rounded-full bg-ink-200/70 transition-colors group-hover:bg-brand-400 group-focus-visible:bg-brand-400 group-active:bg-brand-500" />
+            </div>
+          ) : null}
+
           <CollapsibleSection
             title="AI Search"
             icon="mark_chat_read"
             open={effChatOpen}
             onToggle={toggleChat}
-            flex={chatFlex}
-            className="border-t border-ink-100"
+            fill={effChatOpen}
+            style={chatStyle}
+            className={bothOpen ? '' : 'border-t border-ink-100'}
           >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <ThreadListPrimitive.Root className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2">

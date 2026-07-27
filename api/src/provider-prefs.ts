@@ -1,4 +1,5 @@
 import { DEFAULT_CACHE_TTL_SEC, normalizeCacheTtlSec } from './cache-ttl.js';
+import { DEFAULT_HISTORY_TTL_SEC, normalizeHistoryTtlSec } from './history-ttl.js';
 import { SCHEMA, tryQuery } from './db.js';
 import { log, errFields } from './logger.js';
 
@@ -7,9 +8,16 @@ export interface ProviderPrefs {
   ranks: Record<string, number>;
   /** Seconds to cache search/crawl results for this user (all providers). */
   cacheTtlSec?: number;
+  /** Seconds to keep search history + AI threads in Redis (hot tier). */
+  historyTtlSec?: number;
 }
 
-const EMPTY: ProviderPrefs = { disabled: [], ranks: {}, cacheTtlSec: DEFAULT_CACHE_TTL_SEC };
+const EMPTY: ProviderPrefs = {
+  disabled: [],
+  ranks: {},
+  cacheTtlSec: DEFAULT_CACHE_TTL_SEC,
+  historyTtlSec: DEFAULT_HISTORY_TTL_SEC,
+};
 
 const cache = new Map<string, { prefs: ProviderPrefs; at: number }>();
 const TTL = 60_000;
@@ -29,6 +37,7 @@ export async function getProviderPrefs(userId: string): Promise<ProviderPrefs> {
         ? (raw.ranks as Record<string, number>)
         : {},
       cacheTtlSec: normalizeCacheTtlSec(raw?.cacheTtlSec),
+      historyTtlSec: normalizeHistoryTtlSec(raw?.historyTtlSec),
     };
     cache.set(userId, { prefs, at: Date.now() });
     return prefs;
@@ -50,6 +59,7 @@ export async function setProviderPrefs(userId: string, prefs: ProviderPrefs): Pr
       disabled: prefs.disabled.length,
       ranks: Object.keys(prefs.ranks).length,
       cacheTtlSec: prefs.cacheTtlSec,
+      historyTtlSec: prefs.historyTtlSec,
     });
   } catch (e) {
     log.error('setProviderPrefs failed', { userId, ...errFields(e) });

@@ -1,20 +1,20 @@
 // AI chat thread persistence (server tiers). Mirrors the search-history pattern in
-// history.ts: signed-in users get a 3-day rolling store in Redis; paid users also
-// get a durable S3 archive of the full untruncated blob (P2). Threads are mutable,
-// so the index is a ZSET keyed by updatedAt (vs. history's append-only LIST), and
-// the full blob lives in a separate STRING for cheap sidebar reads. Demo,
-// anonymous, and temporary-mode chats are never persisted here. Delete cascades
-// through S3 too — the product must never leak orphan archive objects.
+// history.ts: signed-in users get a rolling Redis store (History Cache preference,
+// default 3 days); paid users also get a durable S3 archive of the full untruncated
+// blob (P2). Threads are mutable, so the index is a ZSET keyed by updatedAt (vs.
+// history's append-only LIST), and the full blob lives in a separate STRING for
+// cheap sidebar reads. Demo, anonymous, and temporary-mode chats are never
+// persisted here. Delete cascades through S3 too — the product must never leak
+// orphan archive objects.
 // Best-effort: failures never block the chat path.
 import { redis, redisHealthy, k } from './store.js';
 import { log, errFields } from './logger.js';
-import { archiveEligible } from './history.js';
+import { archiveEligible, historyTtlForUser } from './history.js';
 import { archiveAiThread, deleteAiThreadArchives } from './storage.js';
 import { deleteFilesForThread, deleteAllUserFiles } from './files/cascade.js';
 import { clearThreadFolder } from './files/folders.js';
 
 const MAX_THREADS = 200;
-const TTL_SEC = 3 * 24 * 3600;          // 3 days, same rolling window as search history
 const MAX_BLOB_BYTES = 512 * 1024;      // 512 KB cap; truncate oldest tool payloads first
 const MAX_MESSAGES = 100;               // and/or 100 messages, whichever first
 
@@ -91,7 +91,7 @@ function truncateBlob(blob: AiThreadBlob): AiThreadBlob {
 
 /**
  * Persist a thread blob.
- * - Redis (hot tier): always attempted for signed-in users, TTL 3 days, truncated blob.
+ * - Redis (hot tier): always attempted for signed-in users, TTL from History Cache preference, truncated blob.
  * - S3 (durable archive): fired in parallel for every non-demo user, untruncated blob.
  * Both paths are best-effort — failures are logged, never thrown.
  */
@@ -106,6 +106,7 @@ export async function saveAiThread(blob: AiThreadBlob): Promise<void> {
 
   if (!redisHealthy()) return;
   try {
+    const ttlSec = await historyTtlForUser(blob.userId);
     const trimmed = truncateBlob({ ...blob, messages: [...blob.messages] });
     const meta: AiThreadIndexEntry = {
       threadId: trimmed.threadId,
@@ -123,9 +124,9 @@ export async function saveAiThread(blob: AiThreadBlob): Promise<void> {
     // the post-ZADD size. Eliminates a follow-up round trip on every save.
     const pipe = redis.pipeline();
     pipe.zadd(ix, trimmed.updatedAt, trimmed.threadId);
-    pipe.set(mk, JSON.stringify(meta), 'EX', TTL_SEC);
-    pipe.set(bk, JSON.stringify(trimmed), 'EX', TTL_SEC);
-    pipe.expire(ix, TTL_SEC);
+    pipe.set(mk, JSON.stringify(meta), 'EX', ttlSec);
+    pipe.set(bk, JSON.stringify(trimmed), 'EX', ttlSec);
+    pipe.expire(ix, ttlSec);
     pipe.zcard(ix);
     const results = await pipe.exec();
 
@@ -260,5 +261,5 @@ export async function isFirstTurn(userId: string, threadId: string): Promise<boo
 }
 
 /** Tier label for the /v1/ai/threads response — mirrors historyTierFor so the client
- *  can show the same "Synced · 3-day server history + durable archive" copy. */
+ *  can show the same synced / archive copy (days come from History Cache preference). */
 export const aiThreadTierFor = (userId: string) => (archiveEligible(userId) ? 'redis+archive' : 'redis');

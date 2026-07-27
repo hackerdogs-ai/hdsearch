@@ -14,7 +14,7 @@ const ENDPOINTS = [
   { m: 'POST', p: '/v1/search/vector/index', d: 'Embed + index documents. Body: documents[], namespace, ttl (default 24h).' },
   { m: 'POST', p: '/v1/crawl', d: 'Crawl a URL. Body: url, engine?, formats[](markdown|text|html|links|images|screenshot|pdf), render, store. screenshot/pdf return data URLs.' },
   { m: 'GET', p: '/v1/archive', d: 'Fetch a web-archive capture (the archived page, not the live site). Query: provider(wayback|commoncrawl), url, ts, format(json|html). Returns markdown/text or the archived HTML.' },
-  { m: 'GET/DELETE', p: '/v1/history', d: 'Your search history — a 3-day Redis window plus a durable S3 archive. DELETE clears it.' },
+  { m: 'GET/DELETE', p: '/v1/history', d: 'Your search history — a Redis History Cache window plus a durable S3 archive. DELETE clears it.' },
   { m: 'GET', p: '/v1/engines', d: 'List engines. Query: category(search|crawl|darkweb), modality.' },
   { m: 'GET', p: '/v1/account', d: 'Profile, plan and current monthly usage.' },
   { m: 'GET', p: '/openapi.json', d: 'Full OpenAPI 3.1 spec.' },

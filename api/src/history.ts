@@ -1,10 +1,12 @@
 // Search history (server tiers). Anonymous/demo users keep history in the browser
-// only; every signed-in (non-demo) user gets a 3-day rolling history in Redis PLUS
-// a durable S3/SeaweedFS archive — the open-source build has no paid tiers.
-// Recorded best-effort off the search hot path.
+// only; every signed-in (non-demo) user gets a rolling Redis window (History Cache
+// preference, default 3 days) PLUS a durable S3/SeaweedFS archive — the open-source
+// build has no paid tiers. Recorded best-effort off the search hot path.
 import { redis, redisHealthy, k } from './store.js';
 import { archiveHistory, deleteHistoryArchives } from './storage.js';
 import { isDemoUser } from './auth.js';
+import { getProviderPrefs } from './provider-prefs.js';
+import { resolveUserHistoryTtlSec } from './history-ttl.js';
 import { log, errFields } from './logger.js';
 
 export interface HistoryEntry {
@@ -17,7 +19,6 @@ export interface HistoryEntry {
 }
 
 const MAX_ENTRIES = 200;
-const TTL_SEC = 3 * 24 * 3600; // 3 days (logged-in Redis tier)
 /** A durable S3 archive (on top of the Redis tier) is written for every real,
  *  non-demo user. Shared with ai-threads.ts so the AI-thread archive uses the
  *  exact same gate. (No paid tiers in the open-source build.) */
@@ -25,14 +26,20 @@ export const archiveEligible = (userId: string): boolean => !isDemoUser(userId);
 
 const histKey = (userId: string) => k('history', userId);
 
+export async function historyTtlForUser(userId: string): Promise<number> {
+  const prefs = await getProviderPrefs(userId);
+  return resolveUserHistoryTtlSec(prefs.historyTtlSec);
+}
+
 export async function recordHistory(userId: string, entry: HistoryEntry): Promise<void> {
-  // logged-in tier: 3-day rolling list in Redis
+  // logged-in tier: rolling list in Redis (TTL from History Cache preference)
   if (redisHealthy()) {
     try {
+      const ttlSec = await historyTtlForUser(userId);
       const key = histKey(userId);
       await redis.lpush(key, JSON.stringify(entry));
       await redis.ltrim(key, 0, MAX_ENTRIES - 1);
-      await redis.expire(key, TTL_SEC);
+      await redis.expire(key, ttlSec);
     } catch (e) {
       log.warn('history record failed', errFields(e));
     }

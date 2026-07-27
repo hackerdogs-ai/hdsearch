@@ -139,8 +139,12 @@ export const api = {
   upsertProfile: (user: SessionUser) =>
     apiCall('/v1/account/profile', { method: 'PUT', user, body: { email: user.email, name: user.name, picture: user.picture } }),
   providerPrefs: () => apiCall('/v1/engines/prefs'),
-  saveProviderPrefs: (prefs: { disabled?: string[]; ranks?: Record<string, number>; cacheTtlSec?: number }) =>
-    apiCall('/v1/engines/prefs', { method: 'PUT', body: prefs }),
+  saveProviderPrefs: (prefs: {
+    disabled?: string[];
+    ranks?: Record<string, number>;
+    cacheTtlSec?: number;
+    historyTtlSec?: number;
+  }) => apiCall('/v1/engines/prefs', { method: 'PUT', body: prefs }),
   aiProviders: () => apiCall('/v1/ai/providers'),
 
   // Admin endpoints (super-user only)

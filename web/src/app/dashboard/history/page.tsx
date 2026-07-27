@@ -31,7 +31,7 @@ export default async function HistoryPage() {
         <h1 className="text-2xl font-bold text-ink-900">Search History</h1>
         <p className="mt-1 text-sm text-ink-500">
           Recent searches are kept in <span className="font-medium">this browser</span> by default; signed in, they sync to a
-          <span className="font-medium"> 3-day server history</span> plus a durable archive.
+          <span className="font-medium"> server History Cache</span> (configurable in Settings) plus a durable archive.
         </p>
       </div>
 

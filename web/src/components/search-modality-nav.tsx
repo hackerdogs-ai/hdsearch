@@ -163,7 +163,7 @@ export function SearchModalityNav({
         prefetch={false}
         title="API overview"
         aria-label="API overview"
-        className="flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-ink-500 transition hover:bg-ink-100 hover:text-ink-700"
+        className="hidden w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-ink-500 transition hover:bg-ink-100 hover:text-ink-700 sm:flex"
       >
         <span className="material-symbols-outlined text-[20px] leading-none" aria-hidden>
           api

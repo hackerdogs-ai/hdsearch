@@ -1,6 +1,6 @@
 // AI thread persistence endpoints (signed-in users). Mirrors routes/history.ts:
-// GET lists the 3-day Redis index; per-thread GET/PATCH/DELETE operate on the
-// blob; DELETE / wipes the whole set. Demo/anonymous get empty responses.
+// GET lists the Redis index (History Cache preference); per-thread GET/PATCH/DELETE
+// operate on the blob; DELETE / wipes the whole set. Demo/anonymous get empty responses.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { requireAuth, requireScope, isDemoUser } from '../auth.js';
@@ -12,6 +12,7 @@ import {
   clearAiThreads,
   aiThreadTierFor,
 } from '../ai-threads.js';
+import { historyTtlForUser } from '../history.js';
 
 export const aiThreadRoutes = new Hono();
 
@@ -20,8 +21,11 @@ aiThreadRoutes.use('*', requireAuth());
 aiThreadRoutes.get('/', requireScope('search:read'), async (c) => {
   const p = c.get('principal');
   if (isDemoUser(p.userId)) return c.json({ entries: [], tier: 'browser' });
-  const entries = await listAiThreadIndex(p.userId, Number(c.req.query('limit')) || 200);
-  return c.json({ entries, tier: aiThreadTierFor(p.userId) });
+  const [entries, historyTtlSec] = await Promise.all([
+    listAiThreadIndex(p.userId, Number(c.req.query('limit')) || 200),
+    historyTtlForUser(p.userId),
+  ]);
+  return c.json({ entries, tier: aiThreadTierFor(p.userId), historyTtlSec });
 });
 
 aiThreadRoutes.get('/:id', requireScope('search:read'), async (c) => {

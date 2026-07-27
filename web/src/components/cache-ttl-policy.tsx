@@ -60,7 +60,7 @@ export function CacheTtlPolicy() {
     <div className="rounded-lg border border-ink-100 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-ink-900">Result cache TTL</h2>
+          <h2 className="text-sm font-semibold text-ink-900">Result Cache TTL</h2>
           <p className="mt-0.5 text-sm text-ink-500">
             System default and hard max for Redis search/crawl caching. API{' '}
             <code className="text-xs">ttl</code> uses the default when omitted or above the max.{' '}
