@@ -7,9 +7,10 @@
 hdsearch is an aggregated **search results cache** with built-in modalities and an AI Search mode. It saves you **cash**. You work hard for money, save it, don't give it away in credits and subscriptions. 
 
 A free, open-source alternative to SerpAPI + Perplexity that you run on your own
-box. Prioritized multi-engine search with fallback & dedup, a Redis cache,
-per-user **encrypted** provider keys, vector search + RAG over your own files,
-an agentic **AI Search** with tools, and an **MCP server** — TypeScript throughout.
+box. Prioritized multi-engine search with fallback & dedup, a Redis cache with
+configurable TTLs, per-user **encrypted** provider keys, vector search + RAG over
+your own files, agentic **AI Search** with persistent threads, and an **MCP server**
+— TypeScript throughout.
 
 **WHY?** 
 Because I was tired of paying subscriptions and credits to all these search providers. You don't need to index everything to search. What is Serp doing for you? It's just a wrapper on search APIs. I wanted a choice between multiple engines: free and paid. And I don't want long term index. AI agents can query, results are cached, you query the cache again and SAVE!!!
@@ -29,13 +30,15 @@ Because I was tired of paying subscriptions and credits to all these search prov
 
 ## ✨ Features
 
-- **🔎 Meta-search across 20+ engines** — [SearXNG](https://github.com/searxng/searxng), [OpenSERP](https://github.com/karust/openserp) (Google/Yandex/Baidu/Bing), [DuckDuckGo](https://duckduckgo.com), [Wikipedia](https://www.mediawiki.org/wiki/API:REST_API), and more. Prioritized **fallback** (free/self-hosted first) or **aggregate** mode with cross-engine **dedup** and **facets**.
-- **🗂️ 11 modalities** — web, news, images, videos, **maps**, scholar, code, social, **web archive** ([Wayback](https://archive.org/help/wayback_api.php) + [Common Crawl](https://commoncrawl.org/)), and **darkweb** ([Ahmia](https://github.com/ahmia/ahmia-site) over [Tor](https://www.torproject.org/)).
-- **🕷️ Crawl** — fetch any URL to clean markdown / links / text via self-hosted [Crawl4AI](https://github.com/unclecode/crawl4ai) + a [Browserless](https://github.com/browserless/browserless) headless-Chrome fallback for JS pages.
-- **🧠 Vector search + RAG** — index documents (24h TTL) and run semantic KNN via Redis **[RediSearch](https://github.com/RediSearch/RediSearch)** (HNSW), with a brute-force fallback. Upload your own files → parse → embed → retrieve, with **citations**.
-- **🤖 AI Search (agentic)** — a chat that plans and calls tools (`search`, `maps`, `crawl`, `archive`, `chart`, `weather`, render UI) and streams the answer. Works with **local [Ollama](https://github.com/ollama/ollama) (no API key, $0)** or any commercial model you add.
-- **🔌 [MCP](https://modelcontextprotocol.io) server** — expose `hd_search`, `hd_crawl`, `hd_vector_search`, `hd_vector_index`, `hd_list_engines` to Claude / any MCP client.
-- **🔐 Bring-your-own keys, encrypted** — commercial engine/LLM keys are entered in the UI and stored **AES-256-GCM encrypted** in your DB. Nothing leaves your infra.
+- **🔎 Meta-search across 20+ engines** — [SearXNG](https://github.com/searxng/searxng), [OpenSERP](https://github.com/karust/openserp) (Google/Yandex/Baidu/Bing), [DuckDuckGo](https://duckduckgo.com), [Wikipedia](https://www.mediawiki.org/wiki/API:REST_API), and more. Prioritized **fallback** (free/self-hosted first) or **aggregate** mode with cross-engine **dedup** and **facets**. Per-user **enable/disable + per-modality ranking** of engines in the UI.
+- **🗂️ Search modalities** — web, news, images, videos, **maps** / places, scholar, code, social, **web archive** ([Wayback](https://archive.org/help/wayback_api.php) + [Common Crawl](https://commoncrawl.org/)), **darkweb** ([Ahmia](https://github.com/ahmia/ahmia-site) over [Tor](https://www.torproject.org/)), **semantic** (vector KNN grounded with live web), and agentic **AI Search**.
+- **🕷️ Crawl** — fetch any URL to clean markdown / links / text via self-hosted [Crawl4AI](https://github.com/unclecode/crawl4ai) + a [Browserless](https://github.com/browserless/browserless) headless-Chrome fallback for JS pages (optional [Firecrawl](#optional-self-hosted-firecrawl)).
+- **🧠 Vector search + RAG** — index documents (TTL’d) and run semantic KNN via Redis **[RediSearch](https://github.com/RediSearch/RediSearch)** (HNSW), with a brute-force fallback. Upload your own files → parse → embed → retrieve, with **citations**.
+- **🤖 AI Search (agentic)** — a chat that plans and calls tools (`search`, `maps`, `crawl`, `archive`, `chart`, `weather`, render UI) and streams the answer. **Threads**, **folders**, and **file attachments** persist (Redis + S3); **temporary chat** skips server history. Works with **local [Ollama](https://github.com/ollama/ollama) (no API key, $0)** or any commercial model you add. Also exposes an **OpenAI-compatible** `/v1/openai/chat/completions` endpoint.
+- **⏱️ Cache & history TTLs** — Redis **result-cache TTL** (user preference, admin default + hard max) and **history / AI-thread TTL** (1–30 days). **Temporary search** opts a query out of server history.
+- **📈 Trends** — `/trends` headlines panel (platform defaults; optional [hd-feeds](docs/HDSEARCH_HDFEEDS_TRENDS_PRD.md) integration).
+- **🔌 [MCP](https://modelcontextprotocol.io) server** — expose `hd_search`, `hd_crawl`, `hd_vector_search`, `hd_vector_index`, `hd_list_engines` to Claude / any MCP client (Streamable HTTP on `:8792`, or stdio).
+- **🔐 Bring-your-own keys, encrypted** — commercial engine/LLM keys are entered in the UI and stored **AES-256-GCM encrypted** in your DB. Nothing leaves your infra. Admins can also set **system-wide default keys**.
 - **📦 Truly self-contained** — one `docker compose up` bundles [Postgres](https://github.com/postgres/postgres)/[TimescaleDB](https://github.com/timescale/timescaledb), [Redis](https://github.com/redis/redis), [SeaweedFS](https://github.com/seaweedfs/seaweedfs), embeddings, and every provider. No accounts, no SaaS, no per-request bills for the aggregator.
 
 ## 🚀 Quickstart (2 minutes)
@@ -105,8 +108,12 @@ auto-generates its crypto secrets on first boot.
 - **Lock it down anytime** at **System Admin → User registration**: flip to
   **invite-only** and the sign-up form disappears (admins create accounts). Or set
   `HDSEARCH_OPEN_SIGNUP=false` at deploy time.
+- **Optional SMTP** (*System Admin → Email*) unlocks **email verification**,
+  **forgot / reset password**, and **magic-link** sign-in. Without SMTP, local
+  password auth still works.
+- After sign-in, a one-time **disclaimer** gate records consent before the app unlocks.
 
-- **Add search/LLM provider keys later, in the UI** — *Account → Provider Keys* (per-user) or *System Admin* (system-wide). The free/self-hosted engines and local Ollama work with no keys.
+- **Add search/LLM provider keys later, in the UI** — *Account → Provider Keys* (per-user) or *System Admin* (system-wide). Rank engines under *Dashboard → Services*. The free/self-hosted engines and local Ollama work with no keys.
 - The API also serves the **MCP server (Streamable HTTP) on `:8792`**, in the same container — no separate process to run.
 - **Build from source** instead of pulling images: `./publish_to_docker.sh --build-only --native <ns>` then run any compose above (they use `<ns>/hdsearch:*`).
 
@@ -145,14 +152,14 @@ curl http://localhost:8791/v1/search -H "authorization: Bearer $KEY" \
 ## 🧩 Architecture
 
 ```
-                          ┌───────────────────────────── hdsnet (private) ─────────────────────────────┐
+                          ┌─────────────────────────── hdsearchnet (private) ───────────────────────────┐
   Browser ─▶ hds-web ─▶ hds-api ─▶ engine ─▶ providers  (searxng, openserp, crawl4ai, browserless, tor) │
-             (Next.js)   (Hono)  │  ├─ Redis Stack  ── cache · rate-limit · RediSearch vector index      │
-                                 │  ├─ Postgres/TimescaleDB ── users · encrypted keys · history          │
-                                 │  ├─ SeaweedFS (S3) ── crawl archive · uploaded files                  │
+             (Next.js)   (Hono)  │  ├─ Redis Stack  ── cache · history · threads · RediSearch vectors    │
+                                 │  ├─ Postgres/TimescaleDB ── users · encrypted keys · usage            │
+                                 │  ├─ SeaweedFS (S3) ── crawl archive · AI files · thread archive       │
                                  │  ├─ embeddings (MiniLM-384) ── vectors for search + RAG               │
                                  │  └─ Ollama (host) ── local LLMs for AI Search (no key, $0)            │
-  MCP client ─▶ hd-search MCP ───┘                                                                       │
+  MCP client ─▶ :8792 /mcp ──────┘                                                                       │
                           └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -162,20 +169,25 @@ back to brute-force without RediSearch, etc.).
 
 ## 📚 API
 
-Base URL `http://localhost:8791`. Auth: `Authorization: Bearer sk-hds-…`. Full
-interactive spec at `GET /v1/openapi` (Swagger UI in the dashboard).
+Base URL `http://localhost:8791`. Auth: `Authorization: Bearer sk-hds-…`.
+OpenAPI at `GET /openapi.json`; interactive Swagger UI at `/api` (public) and
+`/dashboard/api-reference` (signed-in). In-app docs: `/docs`.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /v1/search` · `GET /v1/search` | Aggregated/fallback search. Body: `q, modality, engine?, mode(fallback\|aggregate), limit, page, facets, freshness?, country?, lang?, noCache?` |
+| `POST /v1/search` · `GET /v1/search` | Aggregated/fallback search. Body: `q, modality, engine?, mode(fallback\|aggregate), limit, page, facets, freshness?, country?, lang?, ttl?, noCache?` |
 | `POST /v1/crawl` | Crawl a URL → `{ result: { markdown, links, ... } }`. `render:true` for JS pages. |
-| `POST /v1/search/vector/index` · `POST /v1/search/vector` | Index documents (per-namespace, TTL) and semantic KNN search. |
+| `POST /v1/search/vector/index` · `POST /v1/search/vector` | Index documents (per-namespace, TTL) and semantic KNN (`groundWithWeb` optional). |
 | `GET /v1/archive` | Extract a Wayback / Common Crawl capture. |
 | `GET /v1/engines` | List engines, modalities, access type, and availability. |
+| `GET/DELETE /v1/history` | Signed-in search history (respects history TTL / temporary mode). |
 | `POST /v1/ai/chat` | Agentic AI Search (SSE stream). |
-| `POST /v1/openai/chat/completions` | OpenAI-compatible chat endpoint. |
+| `GET/PATCH/DELETE /v1/ai/threads` · `/v1/ai/threads/:id` | AI thread list and persistence. |
+| `POST/GET/DELETE /v1/files` · `/v1/folders` | File upload RAG + chat folders. |
+| `POST /v1/openai/chat/completions` | OpenAI-compatible chat endpoint (+ `/v1/openai/models`). |
+| `GET /v1/trends` | Trends headlines payload (powers `/trends`). |
 | `PUT /v1/keys/providers` · `POST /v1/keys/api` | Manage provider keys (encrypted) and API keys. |
-| `GET /healthz` | Deep health (redis/postgres/seaweedfs/rediSearch). |
+| `GET /health` · `GET /healthz` | Liveness / deep health (redis/postgres/seaweedfs/rediSearch). |
 
 <details><summary>Search response (trimmed)</summary>
 
@@ -195,7 +207,8 @@ A chat that **plans, calls tools, and streams** a cited answer. Tools:
 
 - **Local & free by default:** point it at a host-run **[Ollama](https://ollama.com)** — models are auto-discovered from whatever you've pulled, no API key, $0. The compose already wires `host.docker.internal:11434`.
 - **Or any commercial model** — add the key in the UI and pick the model from the dropdown.
-- **RAG:** upload files to a chat → they're parsed, embedded, indexed, and retrieved to ground the answer with citations.
+- **Threads & folders:** conversations persist server-side (Redis hot tier + S3 archive) with the same history TTL as search; organize them into folders; **temporary chat** keeps a session local-only.
+- **RAG:** upload files to a chat → they're parsed, embedded, indexed, and retrieved to ground the answer with citations (delete cascades with the thread).
 - **Tokens, not credits:** each answer reports the tokens it actually consumed. No metering, no quotas, no per-request billing by hdsearch.
 
 ### LLM providers
@@ -268,6 +281,8 @@ URLs, and flags. Copy `.env.selfhost.example` to change a default.
 | `HDSEARCH_EMBEDDINGS_PROVIDER` | `minilm` | `minilm` \| `openai` \| `none` |
 | `HDSEARCH_GEOCODER_URL` | public Photon | Self-hosted maps geocoder (`--profile maps`) |
 
+SMTP (`SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM`, or *System Admin → Email*) is optional — it enables verification, password reset, and magic-link sign-in.
+
 **Provider keys and all secrets are handled in the UI or auto-generated — never in env.** See [docs/CONFIGURATION_DEPLOYMENT.md](docs/CONFIGURATION_DEPLOYMENT.md).
 
 ## 🔐 Security & privacy
@@ -275,7 +290,8 @@ URLs, and flags. Copy `.env.selfhost.example` to change a default.
 - **Your data stays on your infra.** No telemetry, no external SaaS, no per-request calls home.
 - **No secrets in files.** Encryption / session / internal-BFF secrets are auto-generated into a Docker volume; back it up for disaster recovery.
 - **Provider keys are encrypted at rest** (AES-256-GCM) in your Postgres — plaintext keys never touch disk.
-- **Local auth** — email + password (scrypt-hashed), first-run admin, DB-driven roles (`admin`/`user`). Sessions are an encrypted, `httpOnly` cookie.
+- **Local auth** — email + password (scrypt-hashed), first-run admin, DB-driven roles (`admin`/`user`). Sessions are an encrypted, `httpOnly` cookie. With SMTP: email verification, password reset, magic-link sign-in.
+- **Privacy controls** — temporary search/chat, configurable history TTL, and a one-time disclaimer acceptance gate.
 - **Rate limiting** per identity (default 120/min) with `X-RateLimit-*` headers; CORS is configurable.
 
 ## ⚠️ Limitations & caveats
@@ -309,10 +325,14 @@ Then run them anywhere: `HDSEARCH_IMAGE_NS=<namespace> docker compose -f docker-
 ## 🛠️ Development
 
 ```bash
-# API (Hono)
-cd api && npm install && npm run dev        # :8791 ; npm run typecheck ; npm run test
-# Web (Next.js)
-cd web && npm install && npm run dev        # :3000
+# Full Docker stack
+./start_docker.sh                               # or: up --build
+# Host-side API / web (against Docker infra or your own services)
+./start_api.sh                                  # :8791 (tsx watch)
+./start_web.sh 3005                             # pick a free port
+# Or classic npm:
+cd api && npm install && npm run dev            # :8791 ; npm run typecheck ; npm run test
+cd web && npm install && npm run dev            # :3000
 ```
 
 - Test plan: [docs/E2E_TEST_PLAN.md](docs/E2E_TEST_PLAN.md) (190 cases across every subsystem).
@@ -321,7 +341,7 @@ cd web && npm install && npm run dev        # :3000
 
 ## 🗺️ Roadmap
 
-- Optional OIDC/SSO on top of local auth · SQLite single-binary mode · more built-in providers · a public benchmark vs SerpAPI.
+- Optional OIDC/SSO on top of local auth · SQLite single-binary mode · more built-in providers · in-app **Apps** tab for OAuth MCP connectors ([draft](docs/apps-mcp.md)) · a public benchmark vs SerpAPI.
 
 ## 🙏 Built on (credits & links)
 
