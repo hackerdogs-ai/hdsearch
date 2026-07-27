@@ -45,14 +45,23 @@ Because I was tired of paying subscriptions and credits to all these search prov
 
 You need **Docker** (with Compose). Nothing else.
 
-Pick a **deployment topology** — all on the `hdsearchnet` network:
+Pick a **deployment topology** — all on the `hdsearchnet` network. The helper
+scripts (`./start_docker.sh`, `./stop_docker.sh`) are thin wrappers; you can
+always run `docker compose` directly.
+
+| Compose file | What it runs |
+|---|---|
+| [`docker-compose-full.yml`](docker-compose-full.yml) | **Everything** — infra + api + web (includes the two below) |
+| [`docker-compose-infra.yml`](docker-compose-infra.yml) | Datastores + providers only |
+| [`docker-compose-core.yml`](docker-compose-core.yml) | `hds-api` + `hds-web` only (point at your own services) |
 
 **Full — everything in one command (recommended to start):**
 ```bash
 git clone https://github.com/hackerdogs-ai/hdsearch.git && cd hdsearch
-./start_docker.sh                                   # pulls images + bundled infra (hds-*)
+docker compose -f docker-compose-full.yml up -d
 open http://localhost:3000                          # first run → setup wizard, then admin account
-# stop: ./stop_docker.sh
+# stop:  docker compose -f docker-compose-full.yml down
+# optional wrappers: ./start_docker.sh · ./stop_docker.sh
 ```
 
 Local development (API / web on the host, against Docker infra or your own services):
@@ -325,8 +334,9 @@ Then run them anywhere: `HDSEARCH_IMAGE_NS=<namespace> docker compose -f docker-
 ## 🛠️ Development
 
 ```bash
-# Full Docker stack
-./start_docker.sh                               # or: up --build
+# Full Docker stack (compose directly, or ./start_docker.sh)
+docker compose -f docker-compose-full.yml up -d
+docker compose -f docker-compose-full.yml down
 # Host-side API / web (against Docker infra or your own services)
 ./start_api.sh                                  # :8791 (tsx watch)
 ./start_web.sh 3005                             # pick a free port
