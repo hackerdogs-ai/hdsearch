@@ -23,7 +23,7 @@ import { AiModelPicker } from './ai-model-picker';
 import { HD_SEARCH_TOOL_BY_NAME, RenderHdTool } from './hd-search-toolkit';
 import { AiAutoThreadTitle } from './ai-auto-thread-title';
 import { AiComposerDisclaimer } from './ai-composer-disclaimer';
-import { AiAttachButton, AiAttachmentTray, AiDictateButton } from './ai-file-attachments';
+import { AiAttachButton, AiAttachmentTray, AiDictateButton, AiComposerDropzone } from './ai-file-attachments';
 import { CenteredComposerShell } from '../centered-composer-shell';
 
 const MARKDOWN_COMPONENTS = {
@@ -456,6 +456,7 @@ function AiSearchComposer({ className = '' }: { className?: string }) {
 
   return (
     <div className={className}>
+      <AiComposerDropzone>
       <ComposerPrimitive.Root className="rounded-2xl border border-ink-200 bg-white shadow-sm ring-1 ring-ink-100 focus-within:border-brand-400 focus-within:ring-brand-200">
       <AiAttachmentTray />
       {/* Input line: '+' attach at the start, dictate + send at the end (ChatGPT layout). */}
@@ -522,6 +523,7 @@ function AiSearchComposer({ className = '' }: { className?: string }) {
         <AiComposerSettings />
       </div>
     </ComposerPrimitive.Root>
+      </AiComposerDropzone>
       <AiComposerDisclaimer className="mt-3" />
     </div>
   );

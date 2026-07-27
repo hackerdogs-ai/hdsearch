@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Run the HD-Search web UI locally (Next.js dev server). Expects the API running
-# on :8791 (use ./start_hd_search.sh in another shell). Auth0 is optional — without
-# it you get a local dev login.
+# Start the hdsearch web UI locally (Next.js). Expects the API on :8791
+# (use ./start_api.sh in another shell, or the Docker API from ./start_docker.sh).
 #
-#   ./start_hd_search_web.sh            # dev server on :3000
-#   ./start_hd_search_web.sh 3010       # dev server on :3010
-#   PORT=3010 ./start_hd_search_web.sh  # same via env
-#   ./start_hd_search_web.sh 3010 build # compiled prod server on :3010
+#   ./start_web.sh            # dev server on :3000
+#   ./start_web.sh 3010       # dev server on :3010
+#   PORT=3010 ./start_web.sh  # same via env
+#   ./start_web.sh 3010 build # compiled prod server on :3010
+#
+# For the full containerized stack, use ./start_docker.sh instead.
 set -euo pipefail
 cd "$(dirname "$0")/web"
 
@@ -22,7 +23,6 @@ if [ ! -f .env.local ]; then
   cp .env.example .env.local
   sed -i.bak "s|^HDSEARCH_WEB_SESSION_SECRET=.*|HDSEARCH_WEB_SESSION_SECRET=$(gen)|" .env.local && rm -f .env.local.bak
   sed -i.bak "s|^APP_BASE_URL=.*|APP_BASE_URL=${APP_BASE_URL}|" .env.local && rm -f .env.local.bak
-  # match the API's internal secret if it exists
   if [ -f ../api/.env ]; then
     SECRET=$(grep -E '^HDSEARCH_INTERNAL_SECRET=' ../api/.env | head -1 | cut -d= -f2-)
     [ -n "$SECRET" ] && sed -i.bak "s|^HDSEARCH_INTERNAL_SECRET=.*|HDSEARCH_INTERNAL_SECRET=${SECRET}|" .env.local && rm -f .env.local.bak

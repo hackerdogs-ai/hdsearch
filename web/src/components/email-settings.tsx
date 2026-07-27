@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { SecretInput } from '@/components/secret-input';
 
 interface Smtp {
   host: string;
@@ -119,10 +120,12 @@ export function EmailSettings() {
         </label>
         <label className="block">
           <span className="label">Password</span>
-          <input type="password" className="input" value={password}
+          <SecretInput
+            value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder={smtp.hasPassword ? '•••••••• (stored — leave blank to keep)' : 'optional'}
-            autoComplete="new-password" />
+            autoComplete="new-password"
+          />
         </label>
         <label className="block sm:col-span-2">
           <span className="label">From address</span>

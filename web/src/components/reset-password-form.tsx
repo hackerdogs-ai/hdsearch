@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { checkPassword, PASSWORD_HINT } from '@/components/auth-card';
+import { SecretInput } from '@/components/secret-input';
 
 /** Redeem a reset link and set a new password. The token is single-use. */
 export function ResetPasswordForm({ token }: { token: string }) {
@@ -66,12 +67,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <form onSubmit={submit} className="mt-6 space-y-3">
         <div>
           <label className="label">New password</label>
-          <input
-            type="password"
+          <SecretInput
             required
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            className="input"
             autoComplete="new-password"
           />
           <p className={`mt-1 text-sm ${pw && checkPassword(pw) ? 'text-ink-500' : 'text-green-600'}`}>
@@ -80,12 +79,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
         </div>
         <div>
           <label className="label">Confirm new password</label>
-          <input
-            type="password"
+          <SecretInput
             required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="input"
             autoComplete="new-password"
           />
         </div>

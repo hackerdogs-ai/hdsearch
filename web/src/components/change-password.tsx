@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { checkPassword, PASSWORD_HINT } from '@/components/auth-card';
+import { SecretInput } from '@/components/secret-input';
 
 /** Rotate your own password. Requires the current one, so a hijacked session
  *  alone cannot lock the owner out. */
@@ -67,23 +68,19 @@ export function ChangePassword() {
         <form onSubmit={submit} className="mt-4 max-w-sm space-y-3">
           <div>
             <label className="label">Current password</label>
-            <input
-              type="password"
+            <SecretInput
               required
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
-              className="input"
               autoComplete="current-password"
             />
           </div>
           <div>
             <label className="label">New password</label>
-            <input
-              type="password"
+            <SecretInput
               required
               value={pw}
               onChange={(e) => setPw(e.target.value)}
-              className="input"
               autoComplete="new-password"
             />
             <p className={`mt-1 text-sm ${pw && checkPassword(pw) ? 'text-ink-500' : 'text-green-600'}`}>
@@ -92,12 +89,10 @@ export function ChangePassword() {
           </div>
           <div>
             <label className="label">Confirm new password</label>
-            <input
-              type="password"
+            <SecretInput
               required
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="input"
               autoComplete="new-password"
             />
           </div>

@@ -20,7 +20,7 @@ export function AiPageHeader({
     <header className="shrink-0 border-b border-ink-100 bg-white/90 backdrop-blur">
       <div className="flex items-center gap-1 px-2 py-1.5 sm:gap-2 sm:px-4">
         {/* Left: menu + brand — sized to content so the center tabs get max room */}
-        <div className="flex min-w-0 max-w-[8rem] shrink items-center gap-0.5 sm:max-w-[12rem] sm:gap-1">
+        <div className="flex min-w-0 max-w-[10.5rem] shrink items-center gap-0.5 sm:max-w-[15rem] sm:gap-1">
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -33,7 +33,7 @@ export function AiPageHeader({
             </span>
           </button>
 
-          <Brand className="min-w-0 shrink [&_span]:truncate" />
+          <Brand className="min-w-0 shrink" />
         </div>
 
         {/* Center: modality tabs — same row as brand */}

@@ -139,6 +139,7 @@ export const env = {
     maxChars: int(e.HDSEARCH_FILE_MAX_CHARS, 5_000_000),
     ocr: bool(e.HDSEARCH_FILE_OCR, false), // tesseract.js (optional dep)
     vision: bool(e.HDSEARCH_FILE_VISION, false), // vision captioning via LLM keys
+    blockExecutables: bool(e.HDSEARCH_FILE_BLOCK_EXECUTABLES, true), // reject compiled executables/installers on upload (C.9)
     avUrl: e.HDSEARCH_FILE_AV_URL || '', // optional AV scan endpoint; empty = disabled
     figmaToken: e.HDSEARCH_FIGMA_TOKEN || '',
     // retrieval: how many chunks to inject into a grounded chat turn

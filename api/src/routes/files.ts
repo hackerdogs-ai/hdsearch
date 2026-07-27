@@ -13,6 +13,7 @@ import { recordUsage } from '../metrics.js';
 import { createFile, getUserFile, listFiles, setFolder } from '../files/db.js';
 import { enqueue } from '../files/queue.js';
 import { deleteFile, deleteFilesForThread } from '../files/cascade.js';
+import { sniffUpload } from '../files/sniff.js';
 
 export const fileRoutes = new Hono();
 
@@ -77,12 +78,23 @@ fileRoutes.post('/', requireScope('vector:read'), async (c) => {
   if (buffer.length > env.file.maxBytes) {
     return c.json({ error: 'file_too_large', maxBytes: env.file.maxBytes }, 413);
   }
+
+  // Never trust the client MIME (C.9): sniff magic bytes to reject compiled
+  // executables/installers and to correct a missing/generic content-type before we
+  // store or route the file. Runs before any S3 write so rejects leave nothing behind.
+  const sniff = sniffUpload(buffer, ext, mime, { blockExecutables: env.file.blockExecutables });
+  if (sniff.blocked) {
+    log.warn('upload rejected by content policy', { userId: p.userId, ext, reason: sniff.reason });
+    return c.json({ error: 'unsupported_media_type', message: sniff.reason || 'file type not accepted' }, 415);
+  }
+  const effectiveMime = sniff.mime;
+
   const sha256 = createHash('sha256').update(buffer).digest('hex');
   const s3Key = s3Path(`files/${p.userId}/${threadId}/${fileId}/raw/${name}`);
 
   // 1) durable bytes first — nothing half-written if this throws.
   try {
-    await putFile(s3Key, buffer, mime);
+    await putFile(s3Key, buffer, effectiveMime);
   } catch (e) {
     log.error('file storage failed', { fileId, ...errFields(e) });
     return c.json({ error: 'storage_unavailable', message: 'could not store file; retry shortly' }, 503);
@@ -90,7 +102,7 @@ fileRoutes.post('/', requireScope('vector:read'), async (c) => {
 
   // 2) source-of-truth row.
   try {
-    await createFile({ id: fileId, userId: p.userId, threadId, folderId, name, ext, mime, sizeBytes: buffer.length, sha256, s3Key, namespace });
+    await createFile({ id: fileId, userId: p.userId, threadId, folderId, name, ext, mime: effectiveMime, sizeBytes: buffer.length, sha256, s3Key, namespace });
   } catch (e) {
     log.error('file row insert failed', { fileId, ...errFields(e) });
     // Bytes are stored; without a row we can't track it — surface the failure.

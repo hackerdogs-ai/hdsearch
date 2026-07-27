@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { SecretInput } from '@/components/secret-input';
 import { TERMS_VERSION } from '@/lib/terms-meta';
 
 const MIN_LENGTH = 12;
@@ -209,13 +210,11 @@ export function AuthCard({
 
         <div>
           <label className="label">Password</label>
-          <input
+          <SecretInput
             name="password"
-            type="password"
             required
             minLength={isRegister ? MIN_LENGTH : undefined}
             placeholder={isRegister ? `At least ${MIN_LENGTH} characters` : 'Your password'}
-            className="input"
             autoComplete={isRegister ? 'new-password' : 'current-password'}
             onChange={isRegister ? (e) => setPw(e.target.value) : undefined}
           />
@@ -231,12 +230,10 @@ export function AuthCard({
         {isRegister && (
           <div>
             <label className="label">Confirm password</label>
-            <input
+            <SecretInput
               name="confirm"
-              type="password"
               required
               placeholder="Re-enter your password"
-              className="input"
               autoComplete="new-password"
             />
           </div>

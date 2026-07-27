@@ -27,7 +27,7 @@ export function ExperienceHeader({
   return (
     <header className="shrink-0 border-b border-ink-100 bg-white/90 backdrop-blur">
       <div className="flex items-center gap-1 px-2 py-1.5 sm:gap-2 sm:px-4">
-        <div className="flex min-w-0 max-w-[8rem] shrink items-center gap-0.5 sm:max-w-[12rem] sm:gap-1">
+        <div className="flex min-w-0 max-w-[10.5rem] shrink items-center gap-0.5 sm:max-w-[15rem] sm:gap-1">
           {setSidebarOpen && (
             <button
               type="button"
@@ -41,7 +41,7 @@ export function ExperienceHeader({
               </span>
             </button>
           )}
-          <Brand className="min-w-0 shrink [&_span]:truncate" />
+          <Brand className="min-w-0 shrink" />
         </div>
 
         <div className="min-w-0 flex-1 overflow-x-auto py-1">

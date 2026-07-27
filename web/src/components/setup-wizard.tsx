@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { SecretInput } from '@/components/secret-input';
 
 type Svc = { key: string; label: string; required: boolean; url: string; accessKey?: string; provider?: string };
 type Result = { reachable: boolean; ms?: number; detail?: string };
@@ -154,7 +155,7 @@ export function SetupWizard({ edit = false }: { edit?: boolean }) {
         {k === 's3' && (
           <div className="mt-2 grid grid-cols-2 gap-2">
             <input className="input text-sm" value={vals.s3?.accessKey || ''} onChange={(e) => set('s3', 'accessKey', e.target.value)} placeholder="access key" />
-            <input className="input text-sm" type="password" value={vals.s3?.secretKey || ''} onChange={(e) => set('s3', 'secretKey', e.target.value)} placeholder="secret key (unchanged if blank)" />
+            <SecretInput className="text-sm" value={vals.s3?.secretKey || ''} onChange={(e) => set('s3', 'secretKey', e.target.value)} placeholder="secret key (unchanged if blank)" />
           </div>
         )}
       </div>

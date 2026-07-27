@@ -2,7 +2,11 @@
 
 import { useState, type InputHTMLAttributes } from 'react';
 
-type SecretInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>;
+type SecretInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+  /** Override the show/hide control labels (defaults suit passwords and API keys). */
+  showLabel?: string;
+  hideLabel?: string;
+};
 
 function EyeIcon() {
   return (
@@ -23,7 +27,13 @@ function EyeOffIcon() {
 }
 
 /** Password field with show/hide toggle — use for API keys and other secrets. */
-export function SecretInput({ className = '', disabled, ...props }: SecretInputProps) {
+export function SecretInput({
+  className = '',
+  disabled,
+  showLabel = 'Show password',
+  hideLabel = 'Hide password',
+  ...props
+}: SecretInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -40,8 +50,8 @@ export function SecretInput({ className = '', disabled, ...props }: SecretInputP
         disabled={disabled}
         onClick={() => setVisible((v) => !v)}
         className="secret-input-toggle"
-        aria-label={visible ? 'Hide secret' : 'Show secret'}
-        title={visible ? 'Hide secret' : 'Show secret'}
+        aria-label={visible ? hideLabel : showLabel}
+        title={visible ? hideLabel : showLabel}
       >
         {visible ? <EyeOffIcon /> : <EyeIcon />}
       </button>

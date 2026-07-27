@@ -1,6 +1,6 @@
 <div align="center">
 
-# hdsearch (Stop paying for search API subscriptions)
+# <img src="docs/hdsearch-logo.svg" alt="hdsearch" width="48" height="48" align="absmiddle" /> hdsearch (Stop paying for search API subscriptions)
 
 **One self-hosted API for search, crawl, vector search, and agentic AI answers — across 20+ engines.**
 
@@ -47,8 +47,16 @@ Pick a **deployment topology** — all on the `hdsearchnet` network:
 **Full — everything in one command (recommended to start):**
 ```bash
 git clone https://github.com/hackerdogs-ai/hdsearch.git && cd hdsearch
-docker compose -f docker-compose-full.yml up -d     # pulls the images + bundled infra
+./start_docker.sh                                   # pulls images + bundled infra (hds-*)
 open http://localhost:3000                          # first run → setup wizard, then admin account
+# stop: ./stop_docker.sh
+```
+
+Local development (API / web on the host, against Docker infra or your own services):
+```bash
+./start_api.sh          # API on :8791 (tsx watch)
+./start_web.sh 3005     # Web UI (pick a free port)
+# stop: ./stop_local.sh
 ```
 
 **Split — run infra and core separately (scale them independently):**

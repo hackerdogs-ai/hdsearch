@@ -3,7 +3,7 @@
 // composer toolbar, and a chip tray (AiAttachmentTray) shown above the input. Both
 // share the module attachment store so the SSE adapter can send the ready fileIds
 // with the chat turn. Uploads stream through the BFF; status is polled to `ready`.
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useAssistantApi, useAssistantState } from '@assistant-ui/react';
 import { useAiSearch } from './ai-search-context';
 import {
@@ -33,6 +33,11 @@ async function startUpload(file: File) {
   }
 }
 
+/** Kick off uploads for a batch of files (from the picker or a drag-drop). */
+export function startUploads(files: Iterable<File>) {
+  for (const f of files) void startUpload(f);
+}
+
 export function AiAttachButton({ className = '' }: { className?: string }) {
   const { signedIn } = useAiSearch();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +45,7 @@ export function AiAttachButton({ className = '' }: { className?: string }) {
   const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     e.target.value = ''; // allow re-selecting the same file
-    for (const f of files) void startUpload(f);
+    startUploads(files);
   }, []);
 
   if (!signedIn) return null;
@@ -138,6 +143,71 @@ const KIND_ICON: Record<MediaKind, string> = { image: 'image', audio: 'audio_fil
 function capabilityWarning(kind: MediaKind, canVision: boolean): string {
   if (kind === 'image' && !canVision) return "This model can't view images — switch to a vision model.";
   return '';
+}
+
+/**
+ * Wraps the composer so files can be dragged and dropped onto it (spec A.6/Part D).
+ * Uses an enter/leave depth counter (dragenter/leave fire for every child element) to
+ * avoid overlay flicker. No-ops for signed-out users, matching the attach button.
+ */
+export function AiComposerDropzone({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const { signedIn } = useAiSearch();
+  const [dragging, setDragging] = useState(false);
+  const depth = useRef(0);
+
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth.current += 1;
+    setDragging(true);
+  }, []);
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    depth.current -= 1;
+    if (depth.current <= 0) {
+      depth.current = 0;
+      setDragging(false);
+    }
+  }, []);
+  const onDrop = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth.current = 0;
+    setDragging(false);
+    startUploads(Array.from(e.dataTransfer.files));
+  }, []);
+
+  if (!signedIn) return <>{children}</>;
+
+  return (
+    <div
+      className={`relative ${className}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {children}
+      {dragging ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-400 bg-brand-50/85 backdrop-blur-[1px]"
+          aria-hidden
+        >
+          <div className="flex items-center gap-2 text-sm font-medium text-brand-700">
+            <span className="material-symbols-outlined text-xl leading-none">upload_file</span>
+            Drop files to attach
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function AiAttachmentTray({ className = '' }: { className?: string }) {
