@@ -108,7 +108,7 @@ that connects HD-Search to its infrastructure:
 That's the whole setup. **There are no secrets to configure** — the app
 auto-generates its crypto secrets on first boot.
 
-### Accounts (the Databasus/Directus model)
+### Accounts
 
 - **First run → create the admin.** With no accounts yet, the sign-in page shows
   **"Create your admin account"**; the account you create becomes the administrator.
