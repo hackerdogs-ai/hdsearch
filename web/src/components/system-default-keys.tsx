@@ -20,7 +20,7 @@ const LLM_PROVIDERS = [
   { id: 'openai', name: 'OpenAI', field: 'openai' },
   { id: 'xai', name: 'xAI (Grok)', field: 'xai' },
   { id: 'google', name: 'Google', field: 'google' },
-  { id: 'aws_bedrock', name: 'AWS Bedrock', field: 'aws_access_key' },
+  { id: 'aws_bedrock', name: 'AWS Bedrock', field: 'aws_bedrock' },
   { id: 'azure', name: 'Azure OpenAI', field: 'azure_openai' },
   { id: 'openrouter', name: 'OpenRouter', field: 'openrouter' },
   { id: 'groq', name: 'Groq', field: 'groq' },

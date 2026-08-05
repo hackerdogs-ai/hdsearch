@@ -226,7 +226,7 @@ export const env = {
     groq: e.HDSEARCH_GROQ_KEY || e.GROQ_API_KEY || '',
     mistral: e.HDSEARCH_MISTRAL_KEY || e.MISTRAL_API_KEY || '',
     azure_openai: e.HDSEARCH_AZURE_OPENAI_KEY || e.AZURE_OPENAI_API_KEY || '',
-    aws_access_key: e.AWS_ACCESS_KEY_ID || '',
+    aws_bedrock: e.HDSEARCH_BEDROCK_KEY || e.AWS_BEARER_TOKEN_BEDROCK || '',
   } as Record<string, string>,
 
   // ---- local (self-hosted) auth ----

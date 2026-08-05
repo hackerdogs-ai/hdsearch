@@ -236,7 +236,7 @@ stored AES-256-GCM encrypted.
 | [Groq](https://groq.com) | commercial | `groq` | [docs](https://console.groq.com/docs) |
 | [Mistral AI](https://mistral.ai) | commercial | `mistral` | [docs](https://docs.mistral.ai) |
 | [OpenRouter](https://openrouter.ai) | commercial (gateway) | `openrouter` | [docs](https://openrouter.ai/docs) |
-| [AWS Bedrock](https://aws.amazon.com/bedrock) | commercial | `aws_access_key` | [docs](https://docs.aws.amazon.com/bedrock) |
+| [AWS Bedrock](https://aws.amazon.com/bedrock) | commercial | `aws_bedrock` (Bedrock API key) | [docs](https://docs.aws.amazon.com/bedrock) |
 | [Azure OpenAI](https://azure.microsoft.com/en-us/products/ai-services/openai-service) | commercial | `azure_openai` | [docs](https://learn.microsoft.com/en-us/azure/ai-services/openai) |
 
 **Add your own.** *System Admin → LLM providers* takes any **OpenAI-compatible**

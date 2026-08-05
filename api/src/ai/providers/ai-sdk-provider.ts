@@ -14,6 +14,8 @@ import type { LlmProvider, TurnArgs, TurnResult, StreamDelta, ToolCall, NeutralM
 export interface AiSdkProviderConfig {
   id: string;
   keyField: string;
+  /** Extra keystore fields tried after keyField (migration / aliases). */
+  altKeyFields?: string[];
   envKeys?: string[];
   createModel: (apiKey: string, modelId: string) => LanguageModel;
   supportsThinking?: boolean;
@@ -53,7 +55,54 @@ async function resolveApiKey(config: AiSdkProviderConfig, userId?: string): Prom
     const v = process.env[envKey];
     if (v) return v;
   }
-  return (await resolveKey(userId, config.keyField)) || undefined;
+  const fields = [config.keyField, ...(config.altKeyFields || [])];
+  for (const field of fields) {
+    const v = await resolveKey(userId, field);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+/** Models that only accept extended thinking (`enabled` + budget_tokens). */
+function usesExtendedThinkingOnly(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  return /haiku-4-5|sonnet-4-5|opus-4-5|opus-4-1|claude-3/.test(id);
+}
+
+/**
+ * Anthropic thinking config for the chosen model.
+ * - Haiku 4.5 / Sonnet 4.5 / Opus 4.5: extended thinking only (`enabled` + budget).
+ * - Opus 4.7+, Fable 5, Sonnet 4.6+: adaptive + effort (legacy `enabled` returns 400).
+ */
+function anthropicThinkingOptions(
+  modelId: string,
+  effort: string | undefined,
+  maxOutputTokens: number,
+): { thinking: { type: 'enabled'; budgetTokens: number } | { type: 'adaptive' }; effort?: string } | undefined {
+  if (!effort) return undefined;
+
+  if (usesExtendedThinkingOnly(modelId)) {
+    return {
+      thinking: { type: 'enabled', budgetTokens: effortToBudget(effort, maxOutputTokens) },
+    };
+  }
+
+  return {
+    thinking: { type: 'adaptive' },
+    effort,
+  };
+}
+
+function streamPartErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    if (cause instanceof Error && cause.message) return cause.message;
+    return error.message;
+  }
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    return (error as any).message;
+  }
+  return String(error || 'stream error');
 }
 
 export function createAiSdkProvider(config: AiSdkProviderConfig): LlmProvider {
@@ -78,15 +127,19 @@ export function createAiSdkProvider(config: AiSdkProviderConfig): LlmProvider {
         });
       }
 
+      const maxOut = Math.min(args.model.maxOutputTokens, args.maxOutputTokens);
+      const anthropicOpts =
+        args.effort && config.supportsThinking
+          ? anthropicThinkingOptions(args.model.id, args.effort, maxOut)
+          : undefined;
+
       const result = streamText({
         model: languageModel,
         system: args.system,
         messages: toAiSdkMessages(args.messages) as any,
         tools,
-        maxOutputTokens: Math.min(args.model.maxOutputTokens, args.maxOutputTokens),
-        ...(args.effort && config.supportsThinking
-          ? { providerOptions: { anthropic: { thinking: { type: 'enabled', budgetTokens: effortToBudget(args.effort, args.maxOutputTokens) } } } }
-          : {}),
+        maxOutputTokens: maxOut,
+        ...(anthropicOpts ? { providerOptions: { anthropic: anthropicOpts } as any } : {}),
       });
 
       const toolCalls: ToolCall[] = [];
@@ -100,7 +153,7 @@ export function createAiSdkProvider(config: AiSdkProviderConfig): LlmProvider {
             yield { type: 'text', delta };
           }
         } else if (part.type === 'reasoning-delta') {
-          const delta = (part as any).delta || '';
+          const delta = (part as any).text || (part as any).delta || '';
           if (delta) yield { type: 'thinking', delta };
         } else if (part.type === 'tool-call') {
           toolCalls.push({
@@ -108,11 +161,19 @@ export function createAiSdkProvider(config: AiSdkProviderConfig): LlmProvider {
             name: (part as any).toolName,
             input: (part as any).input ?? (part as any).args ?? {},
           });
+        } else if (part.type === 'error') {
+          throw new Error(streamPartErrorMessage((part as any).error));
         }
       }
 
-      const usage = await result.usage;
-      const finishReason = await result.finishReason;
+      let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+      let finishReason: string | undefined;
+      try {
+        usage = await result.usage;
+        finishReason = await result.finishReason;
+      } catch (e) {
+        throw new Error(streamPartErrorMessage(e));
+      }
 
       return {
         text,
@@ -182,14 +243,15 @@ export const azureSdkProvider = createAiSdkProvider({
   },
 });
 
+/** AWS Bedrock via a single Bedrock API key (bearer token) — same UX as Anthropic. */
 export const bedrockSdkProvider = createAiSdkProvider({
   id: 'aws_bedrock',
-  keyField: 'aws_access_key',
-  envKeys: ['AWS_ACCESS_KEY_ID'],
+  keyField: 'aws_bedrock',
+  altKeyFields: ['aws_access_key'], // older UI field name
+  envKeys: ['HDSEARCH_BEDROCK_KEY', 'AWS_BEARER_TOKEN_BEDROCK'],
   createModel: (apiKey, modelId) => {
-    const secretKey = process.env.AWS_SECRET_ACCESS_KEY || '';
-    const region = process.env.AWS_REGION || 'us-east-1';
-    return createAmazonBedrock({ accessKeyId: apiKey, secretAccessKey: secretKey, region })(modelId);
+    const region = process.env.HDSEARCH_BEDROCK_REGION || process.env.AWS_REGION || 'us-east-1';
+    return createAmazonBedrock({ apiKey, region })(modelId);
   },
 });
 

@@ -238,7 +238,7 @@
       "website": "https://aws.amazon.com/bedrock",
       "docsUrl": "https://docs.aws.amazon.com/bedrock",
       "accessType": "commercial",
-      "keyFields": ["aws_access_key"],
+      "keyFields": ["aws_bedrock"],
       "supportsStreaming": true,
       "models": [
         {

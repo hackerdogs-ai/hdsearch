@@ -340,7 +340,7 @@ const PROVIDER_HINTS: Record<string, string> = {
   mistral: 'Set HDSEARCH_MISTRAL_KEY or add a "mistral" provider key under Account → Provider Keys.',
   openrouter: 'Set HDSEARCH_OPENROUTER_KEY or add an "openrouter" provider key under Account → Provider Keys.',
   azure: 'Set HDSEARCH_AZURE_OPENAI_KEY or add an "azure_openai" provider key under Account → Provider Keys.',
-  aws_bedrock: 'Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or add an "aws_access_key" provider key under Account → Provider Keys.',
+  aws_bedrock: 'Set HDSEARCH_BEDROCK_KEY or AWS_BEARER_TOKEN_BEDROCK, or add an "aws_bedrock" provider key (Bedrock API key) under Account → Provider Keys.',
 };
 
 function noProviderMessage(model: LlmModel): string {
