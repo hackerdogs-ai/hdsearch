@@ -18,6 +18,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "mcp": "tsx mcp/server.ts",
     "test:api": "tsx scripts/api-test.ts",
+    "test:docs": "tsx scripts/doc-functional-test.ts",
     "test:mcp": "tsx scripts/mcp-test.ts"
   },
   "dependencies": {

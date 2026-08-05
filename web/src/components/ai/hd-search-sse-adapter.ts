@@ -55,7 +55,7 @@ export interface HdSearchSseAdapterOptions {
   getTemporary?: () => boolean;
   /** Optional title (client-computed via ai-auto-thread-title) sent on the first turn. */
   getTitle?: () => string | undefined;
-  /** Ready file attachment ids to ground this turn on (RAG). */
+  /** Attachment file ids (queued / processing / ready) to ground this turn on. */
   getFileIds?: () => string[] | undefined;
   /** Called with { threadId, temporary } from the SSE `done` event. */
   onThreadIdReceived?: (threadId: string, temporary: boolean) => void;

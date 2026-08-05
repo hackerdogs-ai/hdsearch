@@ -11,7 +11,7 @@ import {
 import { createHdSearchSseAdapter } from './hd-search-sse-adapter';
 import { useHdThreadListAdapter } from './hd-thread-list-adapter';
 import { useAiSearch } from './ai-search-context';
-import { setActiveThread, chatThreadIdOverride, readyFileIds } from './attachments-store';
+import { setActiveThread, chatThreadIdOverride, attachmentFileIds } from './attachments-store';
 
 /**
  * Hybrid runtime for AI Search.
@@ -53,10 +53,10 @@ function AiSearchRuntimeInner({ children, initialThreadId }: { children: ReactNo
         getModelOverride: () => modelOverrideRef.current,
         getSourceDetails: () => sourceDetailsRef.current,
         getTemporary: () => temporaryRef.current,
-        // For a brand-new chat with pending file attachments, fall back to the draft
-        // threadId the attachment store minted so uploads + this turn share a namespace.
-        getThreadId: () => currentThreadIdRef.current ?? seenThreadIdRef.current ?? chatThreadIdOverride(),
-        getFileIds: () => readyFileIds(),
+        // Prefer draft override when uploads were bound to a draft id that differs from
+        // the assistant-ui remote id — otherwise RAG looks in the wrong namespace.
+        getThreadId: () => chatThreadIdOverride() ?? currentThreadIdRef.current ?? seenThreadIdRef.current,
+        getFileIds: () => attachmentFileIds(),
         onThreadIdReceived: (id) => {
           seenThreadIdRef.current = id;
         },

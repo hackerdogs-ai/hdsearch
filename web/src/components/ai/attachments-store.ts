@@ -1,9 +1,9 @@
 'use client';
-// Tiny external store shared between the composer (which uploads files) and the SSE
-// adapter (which must send the SAME threadId + the ready fileIds). A new, unsent chat
-// has no threadId yet, so we mint a stable "draft" id the moment the user attaches a
-// file and bind both the uploads and the first chat turn to it — the server accepts
-// body.threadId, so the file namespace (file:<user>:<threadId>) lines up for RAG.
+// Tiny external store shared between the composer (which uploads documents) and the
+// SSE adapter (which must send the SAME threadId + attachment fileIds). A new, unsent
+// chat has no threadId yet, so we mint a stable "draft" id when needed and bind both
+// the uploads and the first chat turn to it — the server accepts body.threadId, so
+// the file namespace (file:<user>:<threadId>) lines up for document RAG.
 import { useSyncExternalStore } from 'react';
 
 export type AttachmentStatus = 'uploading' | 'queued' | 'processing' | 'ready' | 'failed';
@@ -39,19 +39,33 @@ function subscribe(l: () => void) {
  * chat) — it's the identity we key the compose tray on. `remoteId` is the server thread
  * once known. Switching conversations (including creating a new chat) clears the tray;
  * the server-side files stay attached to their own thread (namespace file:<user>:<id>).
+ *
+ * First bind (undefined → localId) must NOT clear the tray: the user may have attached
+ * files before history.load() ran. Those uploads stay under draftThreadId; chat prefers
+ * that draft via chatThreadIdOverride(), and the API also resolves RAG by fileIds.
  */
 export function setActiveThread(localId: string | undefined, remoteId: string | undefined) {
   if (localId !== currentLocalId) {
+    const firstBind = currentLocalId === undefined && !!localId;
     currentLocalId = localId;
-    activeThreadId = remoteId;
-    draftThreadId = null;
-    if (store.length) {
-      store = [];
-      emit();
+    if (firstBind) {
+      // Keep draft + tray. Prefer the local id as active when there is no draft yet so
+      // subsequent uploads land in the same namespace initialize() will adopt as remoteId.
+      activeThreadId = draftThreadId ?? remoteId ?? localId;
+    } else {
+      activeThreadId = remoteId;
+      draftThreadId = null;
+      if (store.length) {
+        store = [];
+        emit();
+      }
     }
   } else if (remoteId && remoteId !== activeThreadId) {
     // Same conversation — the server just assigned the remote id after the first turn.
-    activeThreadId = remoteId;
+    // Don't orphan draft-bound uploads by switching the active id out from under them.
+    if (!(store.length && draftThreadId && activeThreadId === draftThreadId)) {
+      activeThreadId = remoteId;
+    }
   }
 }
 
@@ -66,26 +80,41 @@ export function resetForNewChat() {
   }
 }
 
-/** Thread id to bind an upload to. Mints a stable draft id for a new chat. */
+/** Thread id to bind an upload to. Prefers the assistant-ui local id (same value
+ *  initialize() promotes to remoteId) so uploads and the first chat turn share a
+ *  namespace. Falls back to a minted draft only when the runtime hasn't mounted yet. */
 export function uploadThreadId(): string {
   if (activeThreadId) return activeThreadId;
+  if (currentLocalId) return currentLocalId;
   if (!draftThreadId) draftThreadId = cryptoRandomId();
   return draftThreadId;
 }
 
-/** threadId to force onto the next chat turn (only when a new chat has draft files). */
+/** threadId to force onto the next chat turn when the compose tray has files.
+ *  Prefers the draft id uploads were bound to so RAG/history stay aligned even if
+ *  assistant-ui later assigns a different remote id. */
 export function chatThreadIdOverride(): string | undefined {
-  if (activeThreadId) return undefined;
-  return store.length && draftThreadId ? draftThreadId : undefined;
+  if (!store.length) return undefined;
+  return draftThreadId || activeThreadId || currentLocalId || undefined;
 }
 
-/** Ready-to-query file ids for the current compose context. */
-export function readyFileIds(): string[] {
-  return store.filter((a) => a.status === 'ready' && a.fileId).map((a) => a.fileId!) as string[];
+/** File ids to send with the chat turn — every attachment that has a server id
+ *  (queued / processing / ready). Failed uploads are omitted. Sending pending ids
+ *  lets the API acknowledge documents that are still extracting instead of the
+ *  model claiming nothing was attached. */
+export function attachmentFileIds(): string[] {
+  return store
+    .filter((a) => a.fileId && a.status !== 'failed' && a.status !== 'uploading')
+    .map((a) => a.fileId!) as string[];
 }
 
 export function anyPending(): boolean {
   return store.some((a) => a.status === 'uploading' || a.status === 'queued' || a.status === 'processing');
+}
+
+/** React subscription for pending uploads/processing — used to gate Send. */
+export function useAttachmentsPending(): boolean {
+  return useSyncExternalStore(subscribe, anyPending, () => false);
 }
 
 export function addAttachment(a: Attachment) {

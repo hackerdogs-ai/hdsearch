@@ -64,8 +64,110 @@ async function upload(threadId: string, name: string, mime: string, bytes: Buffe
   return { status: res.status, json };
 }
 
-/** POST an SSE endpoint; collect event types, text, and a threadId if the server assigns one. */
-async function callSSE(path: string, body: unknown, timeoutMs = 90000): Promise<{ status: number; events: string[]; text: string; threadId: string }> {
+/** Tiny text-layer PDF so pdfjs can extract `text` without OCR. */
+function minimalPdf(text: string): string {
+  const safe = text.replace(/[()\\]/g, '');
+  const stream = `BT /F1 12 Tf 50 700 Td (${safe}) Tj ET`;
+  const objs = [
+    '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n',
+    '2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n',
+    '3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources<< /Font<< /F1 5 0 R >> >> >>endobj\n',
+    `4 0 obj<< /Length ${stream.length} >>stream\n${stream}\nendstream\nendobj\n`,
+    '5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n',
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const o of objs) {
+    offsets.push(Buffer.byteLength(body, 'utf8'));
+    body += o;
+  }
+  const xrefStart = Buffer.byteLength(body, 'utf8');
+  body += `xref\n0 ${objs.length + 1}\n`;
+  body += '0000000000 65535 f \n';
+  for (let i = 1; i <= objs.length; i++) {
+    body += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  body += `trailer<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  return body;
+}
+
+/** Build a minimal OOXML zip (docx/pptx) with fflate. */
+async function zipOoxml(files: Record<string, string>): Promise<Buffer> {
+  const fflate: any = await import('fflate');
+  const enc: Record<string, Uint8Array> = {};
+  for (const [k, v] of Object.entries(files)) enc[k] = fflate.strToU8(v);
+  return Buffer.from(fflate.zipSync(enc));
+}
+
+async function minimalDocx(marker: string): Promise<Buffer> {
+  return zipOoxml({
+    '[Content_Types].xml':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
+      `</Types>`,
+    '_rels/.rels':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
+      `</Relationships>`,
+    'word/document.xml':
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+      `<w:body><w:p><w:r><w:t>${marker}</w:t></w:r></w:p></w:body></w:document>`,
+  });
+}
+
+async function minimalPptx(marker: string): Promise<Buffer> {
+  return zipOoxml({
+    '[Content_Types].xml':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Default Extension="xml" ContentType="application/xml"/>` +
+      `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+      `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+      `</Types>`,
+    '_rels/.rels':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+      `</Relationships>`,
+    'ppt/presentation.xml':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      `<p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst></p:presentation>`,
+    'ppt/_rels/presentation.xml.rels':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+      `</Relationships>`,
+    'ppt/slides/slide1.xml':
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+      `<p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>${marker}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`,
+  });
+}
+
+async function minimalXlsx(marker: string): Promise<Buffer> {
+  const XLSX: any = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['finding', 'severity'],
+    [marker, 'high'],
+  ]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Risks');
+  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+}
+
+/** POST an SSE endpoint; collect event types, text, citations, and a threadId if assigned. */
+async function callSSE(
+  path: string,
+  body: unknown,
+  timeoutMs = 90000,
+): Promise<{ status: number; events: string[]; text: string; threadId: string; citations: number }> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -77,7 +179,7 @@ async function callSSE(path: string, body: unknown, timeoutMs = 90000): Promise<
     });
     if (!res.ok || !res.body) {
       const txt = await res.text().catch(() => '');
-      return { status: res.status, events: [], text: txt.slice(0, 200), threadId: '' };
+      return { status: res.status, events: [], text: txt.slice(0, 200), threadId: '', citations: 0 };
     }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -85,6 +187,7 @@ async function callSSE(path: string, body: unknown, timeoutMs = 90000): Promise<
     const events: string[] = [];
     let text = '';
     let threadId = '';
+    let citations = 0;
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -100,11 +203,12 @@ async function callSSE(path: string, body: unknown, timeoutMs = 90000): Promise<
             const j = JSON.parse(dl);
             if (j.type === 'text' && j.delta) text += j.delta;
             if (typeof j.threadId === 'string') threadId = j.threadId;
+            if (Array.isArray(j.citations)) citations = Math.max(citations, j.citations.length);
           } catch { /* ignore non-JSON frames */ }
         }
       }
     }
-    return { status: res.status, events, text, threadId };
+    return { status: res.status, events, text, threadId, citations };
   } finally {
     clearTimeout(t);
   }
@@ -257,6 +361,36 @@ async function main() {
     const r = await call('/v1/search', { body: { q: 'typescript', engine: 'searxng', limit: 5 } });
     assert(r.status === 200 && r.json.enginesUsed.some((e: any) => e.engine === 'searxng'), 'used searxng');
   });
+
+  // Pin several free/self-hosted engines so multi-provider routing is exercised even
+  // when commercial keys are absent.
+  section('Search — multiple providers');
+  for (const engine of ['searxng', 'duckduckgo', 'wikipedia', 'openserp', 'brave', 'tavily']) {
+    await test(`POST /v1/search engine=${engine}`, async () => {
+      const r = await call('/v1/search', {
+        body: { q: 'open source search aggregator', engine, modality: 'web', limit: 5 },
+        timeoutMs: 45000,
+      });
+      assert(r.status === 200, `status ${r.status}`);
+      const used = (r.json.enginesUsed || []) as Array<{ engine: string; ok?: boolean; error?: string }>;
+      const hit = used.find((e) => e.engine === engine);
+      if (!hit) skip(`${engine} not registered`);
+      if (!hit.ok) skip(`${engine} unavailable: ${hit.error || 'no results'}`);
+      assert(Array.isArray(r.json.results), 'results array');
+      return `${r.json.results.length} results ${r.json.tookMs}ms`;
+    });
+  }
+  await test('aggregate across providers', async () => {
+    const r = await call('/v1/search', {
+      body: { q: 'vector database', modality: 'web', mode: 'aggregate', limit: 20, facets: true },
+      timeoutMs: 60000,
+    });
+    assert(r.status === 200, `status ${r.status}`);
+    const okEngines = (r.json.enginesUsed || []).filter((e: any) => e.ok).map((e: any) => e.engine);
+    assert(okEngines.length >= 1, 'at least one engine ok');
+    return `${r.json.total} results via ${okEngines.join(',')}`;
+  });
+
   await test('paging (page=2)', async () => {
     const r = await call('/v1/search', { body: { q: 'database', modality: 'web', page: 2, limit: 10 } });
     assert(r.status === 200, `status ${r.status}`);
@@ -424,7 +558,16 @@ async function main() {
   await test('GET /v1/ai/models', async () => {
     const r = await call('/v1/ai/models');
     assert(r.status === 200 && Array.isArray(r.json.models) && r.json.models.length, `status ${r.status}`);
-    aiModel = r.json.models.find((m: any) => m.available)?.id || '';
+    // Prefer the local Ollama model we run in this environment; fall back to other
+    // available models (commercial first) if it isn't pulled/reachable.
+    const preferId = 'qwen3-coder:latest';
+    const avail = (r.json.models as any[]).filter((m) => m.available);
+    const preferred =
+      avail.find((m) => m.id === preferId) ||
+      avail.find((m) => m.provider !== 'ollama' && m.accessType !== 'self-hosted') ||
+      avail.find((m) => m.provider !== 'ollama') ||
+      avail[0];
+    aiModel = preferred?.id || '';
     return `${r.json.models.length} models, default=${r.json.default}, available=${aiModel || 'none'}`;
   });
   await test('GET /v1/ai/providers', async () => {
@@ -434,7 +577,7 @@ async function main() {
   });
   const aiThreadId = `apitest-${randomUUID().slice(0, 8)}`;
   await test('POST /v1/ai/chat (SSE stream)', async () => {
-    if (!aiModel) skip('no available model (add a provider key)');
+    if (!aiModel) skip('no available model (pull qwen3-coder:latest or add a provider key)');
     const r = await callSSE('/v1/ai/chat', { messages: [{ role: 'user', content: 'Reply with exactly one word: pong' }], modelOverride: aiModel, threadId: aiThreadId });
     assert(r.events.includes('done'), `no 'done' (status ${r.status}, events=${r.events.join(',')||'none'}, ${r.text})`);
     return `events=${[...new Set(r.events)].join('/')} text="${r.text.slice(0, 30)}"`;
@@ -513,6 +656,181 @@ async function main() {
   });
   await test('DELETE /v1/files?threadId (bulk)', async () => {
     const r = await call(`/v1/files?threadId=${fThread}`, { method: 'DELETE' });
+    assert(r.status === 200 && r.json.ok, `status ${r.status}`);
+  });
+
+  section('Documents — multiple kinds (upload → ready → RAG chat)');
+  const docThread = `apitest-docs-${randomUUID().slice(0, 8)}`;
+  const docs: Array<{ name: string; mime: string; body: Buffer; marker: string }> = [
+    {
+      name: 'brief.txt',
+      mime: 'text/plain',
+      marker: 'UniqueMarkerTxtZebra',
+      body: Buffer.from('Executive brief: UniqueMarkerTxtZebra indicates supply-chain risk in Q3.'),
+    },
+    {
+      name: 'notes.md',
+      mime: 'text/markdown',
+      marker: 'UniqueMarkerMdFalcon',
+      body: Buffer.from('# Notes\n\nUniqueMarkerMdFalcon is the top remediation item for identity.'),
+    },
+    {
+      name: 'page.html',
+      mime: 'text/html',
+      marker: 'UniqueMarkerHtmlOtter',
+      body: Buffer.from(
+        '<!doctype html><html><body><h1>Incident</h1><p>UniqueMarkerHtmlOtter was the root cause.</p></body></html>',
+      ),
+    },
+    {
+      name: 'page.htm',
+      mime: 'text/html',
+      marker: 'UniqueMarkerHtmIbex',
+      body: Buffer.from('<html><body><p>UniqueMarkerHtmIbex in legacy htm.</p></body></html>'),
+    },
+    {
+      name: 'metrics.csv',
+      mime: 'text/csv',
+      marker: 'UniqueMarkerCsvPuma',
+      body: Buffer.from('metric,value\nUniqueMarkerCsvPuma,42\nlatency_ms,120\n'),
+    },
+    {
+      name: 'rows.tsv',
+      mime: 'text/tab-separated-values',
+      marker: 'UniqueMarkerTsvFox',
+      body: Buffer.from('name\tvalue\nUniqueMarkerTsvFox\t7\n'),
+    },
+    {
+      name: 'app.log',
+      mime: 'text/plain',
+      marker: 'UniqueMarkerLogWolf',
+      body: Buffer.from('2026-08-05 INFO UniqueMarkerLogWolf startup complete\n'),
+    },
+    {
+      name: 'memo.rtf',
+      mime: 'application/rtf',
+      marker: 'UniqueMarkerRtfBear',
+      body: Buffer.from('{\\rtf1\\ansi UniqueMarkerRtfBear is in this memo.}'),
+    },
+    {
+      name: 'payload.json',
+      mime: 'application/json',
+      marker: 'UniqueMarkerJsonLynx',
+      body: Buffer.from(JSON.stringify({ finding: 'UniqueMarkerJsonLynx', severity: 'high' }, null, 2)),
+    },
+    {
+      name: 'feed.xml',
+      mime: 'application/xml',
+      marker: 'UniqueMarkerXmlCrane',
+      body: Buffer.from('<root><item><title>UniqueMarkerXmlCrane</title></item></root>'),
+    },
+    {
+      name: 'mini.pdf',
+      mime: 'application/pdf',
+      marker: 'UniqueMarkerPdfKoala',
+      body: Buffer.from(minimalPdf('UniqueMarkerPdfKoala')),
+    },
+    {
+      name: 'report.docx',
+      mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      marker: 'UniqueMarkerDocxEagle',
+      body: await minimalDocx('UniqueMarkerDocxEagle'),
+    },
+    {
+      name: 'deck.pptx',
+      mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      marker: 'UniqueMarkerPptxHawk',
+      body: await minimalPptx('UniqueMarkerPptxHawk'),
+    },
+    {
+      name: 'sheet.xlsx',
+      mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      marker: 'UniqueMarkerXlsxOwl',
+      body: await minimalXlsx('UniqueMarkerXlsxOwl'),
+    },
+  ];
+  const readyDocs: Array<{ fileId: string; name: string; marker: string; chunks: number; degraded: boolean }> = [];
+
+  for (const d of docs) {
+    await test(`upload+ready ${d.name}`, async () => {
+      const u = await upload(docThread, d.name, d.mime, d.body);
+      assert(u.status === 202 && u.json.fileId, `status ${u.status} ${JSON.stringify(u.json).slice(0, 120)}`);
+      const fileId = u.json.fileId as string;
+      let s: any = {};
+      for (let i = 0; i < 90; i++) {
+        const r = await call(`/v1/files/${fileId}/status`);
+        s = r.json;
+        if (s.status === 'ready' || s.status === 'failed') break;
+        await sleep(1000);
+      }
+      assert(s.status === 'ready', `${d.name} status=${s.status} err=${s.error || ''}`);
+      assert((s.chunksIndexed ?? 0) > 0, `${d.name} indexed 0 chunks (degraded=${s.degraded})`);
+      readyDocs.push({
+        fileId,
+        name: d.name,
+        marker: d.marker,
+        chunks: s.chunksIndexed ?? 0,
+        degraded: !!s.degraded,
+      });
+      return `chunks=${s.chunksIndexed}/${s.chunksTotal} degraded=${s.degraded}`;
+    });
+  }
+
+  await test('list thread docs', async () => {
+    const r = await call(`/v1/files?threadId=${docThread}`);
+    assert(r.status === 200 && (r.json.files || []).length >= docs.length, `got ${(r.json.files || []).length}`);
+    return `${r.json.files.length} files`;
+  });
+
+  await test('extracted content contains markers (all kinds)', async () => {
+    if (!readyDocs.length) skip('no ready docs');
+    const ok: string[] = [];
+    const missing: string[] = [];
+    for (const d of readyDocs) {
+      const meta = await call(`/v1/files/${d.fileId}`);
+      const preview = String(meta.json?.preview || '');
+      // Binary office/pdf bytes won't contain the marker as plaintext — preview/chunks do.
+      if (preview.includes(d.marker)) {
+        ok.push(d.name);
+      } else {
+        missing.push(`${d.name}(preview=${JSON.stringify(preview).slice(0, 80)})`);
+      }
+    }
+    assert(missing.length === 0, `markers missing in: ${missing.join('; ') || 'none'}`);
+    return ok.join(',');
+  });
+
+  await test('AI chat emits file_context for attached documents', async () => {
+    if (!aiModel) skip('no available model');
+    if (!readyDocs.length) skip('no ready docs');
+    const fileIds = readyDocs.map((d) => d.fileId);
+    const r = await callSSE(
+      '/v1/ai/chat',
+      {
+        messages: [
+          {
+            role: 'user',
+            content:
+              'Using ONLY the attached documents (do not search the web), list every UniqueMarker* token you see. Reply with tokens only.',
+          },
+        ],
+        modelOverride: aiModel,
+        autoSelect: false,
+        threadId: docThread,
+        fileIds,
+        temporary: true,
+      },
+      180000,
+    );
+    assert(r.status === 200, `status ${r.status} ${r.text.slice(0, 160)}`);
+    assert(r.events.includes('file_context'), `expected file_context SSE, got [${r.events.join(',')}]`);
+    assert(r.citations >= 1, `expected citations, got ${r.citations}`);
+    const found = readyDocs.filter((d) => r.text.includes(d.marker));
+    return `model=${aiModel} file_context ✓ citations=${r.citations} model_markers=${found.length}/${readyDocs.length}`;
+  });
+
+  await test('DELETE /v1/files?threadId (doc kinds cleanup)', async () => {
+    const r = await call(`/v1/files?threadId=${docThread}`, { method: 'DELETE' });
     assert(r.status === 200 && r.json.ok, `status ${r.status}`);
   });
 

@@ -181,21 +181,43 @@ aiRoutes.post('/chat', requireScope('search:read'), async (c) => {
     let assistantOutputTokens = 0;
 
     try {
-      // RAG grounding: if this thread has processed files (or the client named
-      // some), retrieve relevant chunks and inject them into the model turn WITHOUT
-      // mutating the transcript we persist. Best-effort — never blocks/fails the chat.
+      // Document attachment grounding (all doc kinds: pdf, office, text, html, …):
+      // retrieve relevant chunks (or filename/preview fallback) and inject into the
+      // model turn WITHOUT mutating the transcript we persist. Best-effort.
       let chatMessages = body.messages;
       if (!isDemoUser(p.userId) && userPrompt) {
-        const wantRag = (body.fileIds && body.fileIds.length > 0) || (await threadHasReadyFiles(p.userId, threadId).catch(() => false));
+        const namedFiles = !!(body.fileIds && body.fileIds.length > 0);
+        const wantRag = namedFiles || (await threadHasReadyFiles(p.userId, threadId).catch(() => false));
         if (wantRag) {
           const rag = await retrieveFileContext(p.userId, threadId, userPrompt, body.fileIds);
           if (rag) {
-            await stream.writeSSE({ event: 'file_context', data: JSON.stringify({ citations: rag.citations }) });
+            await stream.writeSSE({
+              event: 'file_context',
+              data: JSON.stringify({ type: 'file_context', citations: rag.citations }),
+            });
             // Prepend the grounded context to the latest user message (provider-agnostic).
             const msgs = body.messages.map((m) => ({ ...m }));
             for (let i = msgs.length - 1; i >= 0; i--) {
               if (msgs[i]!.role === 'user') {
                 msgs[i] = { ...msgs[i]!, content: `${rag.context}\n\n---\n\nUser question:\n${msgs[i]!.content}` };
+                break;
+              }
+            }
+            chatMessages = msgs;
+          } else if (namedFiles) {
+            // Client named attachments but we couldn't ground — tell the model so it
+            // doesn't claim no document was attached (still processing / extract failed).
+            const msgs = body.messages.map((m) => ({ ...m }));
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i]!.role === 'user') {
+                msgs[i] = {
+                  ...msgs[i]!,
+                  content:
+                    msgs[i]!.content +
+                    '\n\n[System note: The user attached document(s) to this message, but their text is not available yet ' +
+                    '(still processing, indexing failed, or content could not be extracted). ' +
+                    'Acknowledge the attachment and ask them to wait for processing to finish, or paste key sections.]',
+                };
                 break;
               }
             }

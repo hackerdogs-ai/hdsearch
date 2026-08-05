@@ -24,6 +24,7 @@ import { HD_SEARCH_TOOL_BY_NAME, RenderHdTool } from './hd-search-toolkit';
 import { AiAutoThreadTitle } from './ai-auto-thread-title';
 import { AiComposerDisclaimer } from './ai-composer-disclaimer';
 import { AiAttachButton, AiAttachmentTray, AiDictateButton, AiComposerDropzone } from './ai-file-attachments';
+import { useAttachmentsPending } from './attachments-store';
 import { CenteredComposerShell } from '../centered-composer-shell';
 
 const MARKDOWN_COMPONENTS = {
@@ -453,6 +454,7 @@ function AiSignInLanding() {
 function AiSearchComposer({ className = '' }: { className?: string }) {
   const { groupedModels, modelOverride, setModelOverride, modelsReady } = useAiSearch();
   const isEmpty = useAuiState((s) => s.thread.messages.length === 0);
+  const attachmentsPending = useAttachmentsPending();
 
   return (
     <div className={className}>
@@ -489,8 +491,10 @@ function AiSearchComposer({ className = '' }: { className?: string }) {
           <ComposerPrimitive.Send asChild>
             <button
               type="submit"
-              title="Send message"
-              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+              disabled={attachmentsPending}
+              title={attachmentsPending ? 'Wait for attachments to finish processing' : 'Send message'}
+              aria-label={attachmentsPending ? 'Wait for attachments to finish processing' : 'Send message'}
+              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <svg
                 width="16"

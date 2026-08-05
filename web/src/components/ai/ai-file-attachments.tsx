@@ -1,8 +1,8 @@
 'use client';
-// Composer file attachments: a paperclip button (AiAttachButton) that lives in the
-// composer toolbar, and a chip tray (AiAttachmentTray) shown above the input. Both
-// share the module attachment store so the SSE adapter can send the ready fileIds
-// with the chat turn. Uploads stream through the BFF; status is polled to `ready`.
+// Composer document attachments: paperclip (AiAttachButton) + chip tray
+// (AiAttachmentTray) above the input. Both share the attachment store so the SSE
+// adapter can send fileIds (queued/processing/ready) with the chat turn. Uploads
+// stream through the BFF; status is polled to `ready` before Send is enabled.
 import { useCallback, useRef, useState } from 'react';
 import { useAssistantApi, useAssistantState } from '@assistant-ui/react';
 import { useAiSearch } from './ai-search-context';

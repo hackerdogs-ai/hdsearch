@@ -4,10 +4,10 @@
 // (docs/file-upload-rag.md §C.7/§C.10).
 import { env } from '../env.js';
 import { log, errFields } from '../logger.js';
-import { vectorSearch } from '../vector.js';
+import { vectorSearch, type VecHit } from '../vector.js';
 import { embeddingsEnabled } from '../embeddings.js';
 import { getFileBuffer } from '../storage.js';
-import { listFiles } from './db.js';
+import { getUserFiles, listFiles, type FileRecord } from './db.js';
 import type { MsgImage } from '../ai/providers/types.js';
 
 export interface FileCitation {
@@ -25,8 +25,10 @@ export interface RetrievedContext {
 
 /**
  * Retrieve up to topK relevant chunks from the thread's uploaded files. When
- * `fileIds` is provided, only those files are considered. Returns null when there
- * is nothing to ground on (no files, embeddings off, retrieval failed).
+ * `fileIds` is provided, only those files are considered — and their *stored*
+ * namespaces are searched (not just `file:<user>:<chatThreadId>`), so a draft/
+ * remote thread-id mismatch still grounds the model. Returns null when there is
+ * nothing to ground on (no files, retrieval failed with no preview fallback).
  */
 export async function retrieveFileContext(
   userId: string,
@@ -34,43 +36,129 @@ export async function retrieveFileContext(
   query: string,
   fileIds?: string[],
 ): Promise<RetrievedContext | null> {
-  if (!threadId || !query.trim() || !embeddingsEnabled()) return null;
-  const namespace = `file:${userId}:${threadId}`;
+  if (!query.trim()) return null;
   try {
-    // Over-fetch a little so post-filtering by fileId still yields topK.
-    const raw = await vectorSearch(query, namespace, Math.max(env.file.ragTopK * 2, env.file.ragTopK));
-    const filter = fileIds && fileIds.length ? new Set(fileIds) : null;
-    const hits = raw
-      .filter((h) => h.score >= env.file.ragMinScore)
-      .filter((h) => !filter || filter.has(String((h.metadata as any)?.fileId ?? '')))
-      .slice(0, env.file.ragTopK);
-    if (!hits.length) return null;
+    const named = fileIds?.length ? await getUserFiles(userId, fileIds) : [];
+    const namespaces = namespacesToSearch(userId, threadId, named);
+    if (!namespaces.length) return null;
 
-    const citations: FileCitation[] = [];
-    const parts: string[] = [];
-    hits.forEach((h, i) => {
-      const meta = (h.metadata || {}) as Record<string, unknown>;
-      const name = h.title || String(meta.fileId || 'file');
-      const loc = meta.page ? ` p.${meta.page}` : meta.sheet ? ` [${meta.sheet}]` : '';
-      parts.push(`[${i + 1}] ${name}${loc}\n${h.text}`);
-      citations.push({
-        fileId: String(meta.fileId || ''),
-        name,
-        page: typeof meta.page === 'number' ? meta.page : undefined,
-        sheet: typeof meta.sheet === 'string' ? meta.sheet : undefined,
-        score: h.score,
-      });
-    });
+    const filter = fileIds?.length ? new Set(fileIds) : null;
+    let hits: VecHit[] = [];
 
-    const context =
-      'The user has attached files to this conversation. Use the following excerpts to answer, ' +
-      'and cite sources as [n] where relevant:\n\n' +
-      parts.join('\n\n---\n\n');
-    return { context, citations };
+    if (embeddingsEnabled()) {
+      const overFetch = Math.max(env.file.ragTopK * 2, env.file.ragTopK);
+      const raw: VecHit[] = [];
+      for (const ns of namespaces) {
+        const part = await vectorSearch(query, ns, overFetch);
+        raw.push(...part);
+      }
+      // Dedupe by id (same chunk can appear if namespaces overlap).
+      const seen = new Set<string>();
+      const deduped = raw
+        .filter((h) => {
+          if (seen.has(h.id)) return false;
+          seen.add(h.id);
+          return true;
+        })
+        .filter((h) => !filter || filter.has(String((h.metadata as any)?.fileId ?? '')))
+        .sort((a, b) => b.score - a.score);
+
+      // Explicit attachments: accept lower-scoring hits so "summarize this doc"
+      // still grounds even when the prompt is generic vs. the chunk text.
+      const minScore = filter ? Math.min(env.file.ragMinScore, 0.05) : env.file.ragMinScore;
+      hits = deduped.filter((h) => h.score >= minScore).slice(0, env.file.ragTopK);
+      // Last resort with named files: take top-K regardless of score.
+      if (!hits.length && filter && deduped.length) {
+        hits = deduped.slice(0, env.file.ragTopK);
+      }
+    }
+
+    if (hits.length) {
+      return formatHits(hits);
+    }
+
+    // No vector hits — still tell the model about attached documents (preview /
+    // status) so it doesn't claim nothing was attached. Covers all document kinds
+    // equally: pdf, office, text, html, json, etc.
+    const filesForFallback =
+      named.length > 0
+        ? named.filter((f) => f.status !== 'failed')
+        : threadId
+          ? (await listFiles(userId, threadId, 50)).filter((f) => f.status === 'ready')
+          : [];
+    return formatFileFallback(filesForFallback);
   } catch (e) {
     log.warn('file RAG retrieval failed', { threadId, ...errFields(e) });
     return null;
   }
+}
+
+function namespacesToSearch(userId: string, threadId: string, named: FileRecord[]): string[] {
+  const set = new Set<string>();
+  if (threadId) set.add(`file:${userId}:${threadId}`);
+  for (const f of named) {
+    if (f.namespace) set.add(f.namespace);
+  }
+  return [...set];
+}
+
+function formatHits(hits: VecHit[]): RetrievedContext {
+  const citations: FileCitation[] = [];
+  const parts: string[] = [];
+  hits.forEach((h, i) => {
+    const meta = (h.metadata || {}) as Record<string, unknown>;
+    const name = h.title || String(meta.fileId || 'file');
+    const loc = meta.page ? ` p.${meta.page}` : meta.sheet ? ` [${meta.sheet}]` : '';
+    parts.push(`[${i + 1}] ${name}${loc}\n${h.text}`);
+    citations.push({
+      fileId: String(meta.fileId || ''),
+      name,
+      page: typeof meta.page === 'number' ? meta.page : undefined,
+      sheet: typeof meta.sheet === 'string' ? meta.sheet : undefined,
+      score: h.score,
+    });
+  });
+
+  const context =
+    'The user has attached documents to this conversation. Use the following excerpts to answer, ' +
+    'and cite sources as [n] where relevant:\n\n' +
+    parts.join('\n\n---\n\n');
+  return { context, citations };
+}
+
+/** When vectors are missing/empty, inject file names + previews so the model knows attachments exist. */
+function formatFileFallback(files: FileRecord[]): RetrievedContext | null {
+  if (!files.length) return null;
+  const citations: FileCitation[] = [];
+  const parts: string[] = [];
+  const anyPending = files.some((f) => f.status === 'queued' || f.status === 'processing');
+  files.forEach((f, i) => {
+    const preview = (f.preview || '').trim();
+    let statusNote = '';
+    if (f.status === 'queued' || f.status === 'processing') {
+      statusNote = ' (still processing — text not fully available yet)';
+    } else if (f.chunksIndexed === 0) {
+      statusNote = ' (text index unavailable — only a short preview may be present)';
+    } else if (f.degraded) {
+      statusNote = ' (partial extraction)';
+    }
+    parts.push(
+      `[${i + 1}] ${f.name}${statusNote}\n` +
+        (preview || `(No extracted preview available for this ${f.ext || 'file'}.)`),
+    );
+    citations.push({ fileId: f.id, name: f.name, score: 0 });
+  });
+  const pendingNote = anyPending
+    ? 'Some attachments are still being processed. Acknowledge them and ask the user to retry once processing finishes if you need the full text. '
+    : '';
+  const context =
+    'The user has attached the following documents to this conversation. ' +
+    pendingNote +
+    'Relevant indexed excerpts were not available, so only filenames and short previews are provided. ' +
+    'Answer using what you can from these previews; if the preview is insufficient for the question, ' +
+    'say so clearly and ask the user to paste key sections or wait for processing to complete.\n\n' +
+    parts.join('\n\n---\n\n');
+  return { context, citations };
 }
 
 // Anthropic-supported image media types.
@@ -100,12 +188,15 @@ export async function analyzeThreadMedia(
   caps: { vision: boolean },
 ): Promise<MediaAnalysis> {
   const empty: MediaAnalysis = { images: [], unsupported: [] };
-  if (!threadId) return empty;
   try {
     const wanted = fileIds && fileIds.length ? new Set(fileIds) : null;
-    const files = (await listFiles(userId, threadId, 200)).filter(
-      (f) => f.status !== 'failed' && (!wanted || wanted.has(f.id)),
-    );
+    // Prefer explicit fileIds (works across draft/remote thread-id mismatch); fall back
+    // to listing the chat thread's files when the client didn't name any.
+    const files = wanted
+      ? (await getUserFiles(userId, [...wanted])).filter((f) => f.status !== 'failed')
+      : threadId
+        ? (await listFiles(userId, threadId, 200)).filter((f) => f.status !== 'failed')
+        : [];
     const images: MsgImage[] = [];
     const unsupported = new Map<MediaKind, string[]>();
     const flag = (kind: MediaKind, name: string) => {

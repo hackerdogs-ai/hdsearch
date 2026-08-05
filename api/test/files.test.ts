@@ -102,6 +102,62 @@ describe('audio/video routing', () => {
   });
 });
 
+describe('document text extraction', () => {
+  it('extracts plain text from .txt', async () => {
+    const { result, processorId } = await runExtraction(
+      input('notes.txt', 'text/plain', 'Hello document world'),
+      5000,
+    );
+    expect(processorId).toBe('text');
+    expect(result.blocks.some((b) => b.text.includes('Hello document world'))).toBe(true);
+    expect(result.preview).toContain('Hello document');
+  });
+
+  it('strips HTML to readable text for RAG', async () => {
+    const html = `<!doctype html><html><head><style>.x{color:red}</style><script>alert(1)</script></head>
+      <body><h1>Report</h1><p>Top risk is&nbsp;<b>phishing</b>.</p></body></html>`;
+    const { result, processorId } = await runExtraction(input('page.html', 'text/html', html), 5000);
+    expect(processorId).toBe('text');
+    const joined = result.blocks.map((b) => b.text).join('\n');
+    expect(joined).toContain('Report');
+    expect(joined).toContain('phishing');
+    expect(joined).not.toContain('<script>');
+    expect(joined).not.toContain('alert(1)');
+  });
+
+  it('routes .htm the same as .html', async () => {
+    const { processorId } = await runExtraction(input('a.htm', 'text/html', '<p>Hi</p>'), 5000);
+    expect(processorId).toBe('text');
+  });
+
+  it('routes csv via text processor', async () => {
+    const { result, processorId } = await runExtraction(
+      input('data.csv', 'text/csv', 'a,b\n1,2\n'),
+      5000,
+    );
+    expect(processorId).toBe('text');
+    expect(result.blocks.some((b) => b.text.includes('a,b'))).toBe(true);
+  });
+
+  it('routes pdf to pdf processor', () => {
+    const proc = pickProcessor({
+      mime: 'application/pdf',
+      ext: 'pdf',
+      magic: Buffer.from('%PDF-1.7'),
+    });
+    expect(proc.id).toBe('pdf');
+  });
+
+  it('routes docx to office processor', () => {
+    const proc = pickProcessor({
+      mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ext: 'docx',
+      magic: Buffer.from('PK\x03\x04'),
+    });
+    expect(proc.id).toBe('office');
+  });
+});
+
 describe('chunker', () => {
   it('keeps small blocks whole', () => {
     const chunks = chunkBlocks([{ text: 'short text', kind: 'text' }]);

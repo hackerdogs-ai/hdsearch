@@ -119,6 +119,18 @@ export async function getUserFile(userId: string, id: string): Promise<FileRecor
   return rows[0] ? map(rows[0]) : null;
 }
 
+/** Ownership-scoped batch read (preserves input order; skips missing/foreign ids). */
+export async function getUserFiles(userId: string, ids: string[]): Promise<FileRecord[]> {
+  if (!ids.length) return [];
+  const unique = [...new Set(ids)];
+  const rows = await tryQuery<Row>(
+    `select * from ${SCHEMA}.files where user_id=$1 and id = any($2::text[])`,
+    [userId, unique],
+  );
+  const byId = new Map(rows.map((r) => [r.id, map(r)]));
+  return ids.map((id) => byId.get(id)).filter((f): f is FileRecord => !!f);
+}
+
 export async function listFiles(userId: string, threadId?: string, limit = 200): Promise<FileRecord[]> {
   const rows = threadId
     ? await tryQuery<Row>(
@@ -175,10 +187,13 @@ export async function setFolder(userId: string, id: string, folderId: string | n
   await tryQuery(`update ${SCHEMA}.files set folder_id=$3, updated_at=now() where id=$1 and user_id=$2`, [id, userId, folderId]);
 }
 
-/** Cheap gate: does this thread have at least one successfully-processed file? */
+/** Cheap gate: does this thread have at least one processable document attachment?
+ *  Ready files count even when vector indexing failed (preview fallback still works). */
 export async function threadHasReadyFiles(userId: string, threadId: string): Promise<boolean> {
   const rows = await tryQuery<{ one: number }>(
-    `select 1 as one from ${SCHEMA}.files where user_id=$1 and thread_id=$2 and status='ready' and chunks_indexed > 0 limit 1`,
+    `select 1 as one from ${SCHEMA}.files
+       where user_id=$1 and thread_id=$2 and status='ready'
+       limit 1`,
     [userId, threadId],
   );
   return rows.length > 0;
